@@ -1,0 +1,808 @@
+smug: parsing for lisp, made easy.
+
+* Introduction
+
+  Smug is a library for parsing text, based on monadic parser
+  combinators [fn:1]. Using a simple technique from the functional
+  programming camp, smug makes it simple to create quick extensible
+  recursive descent parsers without funky syntax or impenetrable
+  macrology.
+
+* Features
+  - pure ANSI common lisp with no external dependencies
+  - parsers are first class values written in basic lisp
+  - non-deterministic infinite look-ahead  
+  - easy to learn, easy to use
+  - extensible input protocol : parse strings, streams, lists etc
+  - in-depth tutorial : no previous experience required!
+
+* Download and Install
+
+* Example : Parsing S-Expressions
+
+#+BEGIN_SRC lisp
+(defun open-paren () 
+  (=char #\())
+
+(defun close-paren () 
+  (=char #\)))
+
+(defun non-constituent ()
+  (=or (whitespace) (open-paren)  (close-paren)))
+
+(defun constituent ()
+  (=and (=not (non-constituent)) (item)))
+
+(defun <atom> ()
+  (=let* ((exp (one-or-more (constituent))))
+    (result (coerce exp 'string))))
+
+(defun sexp ()
+  (skip-whitespace 
+   (=or (<atom>) 
+	(=let* ((_ (open-paren))
+		(exp (zero-or-more (sexp)))
+		(_ (close-paren)))
+	  (result exp)))))
+#+END_SRC
+
+* Tutorial
+
+  The tutorial is essentially a translation of Monadic Parser
+  Combinators[fn:1], or at least the first half, into common
+  lisp. Discussion of static types and the details of monads are
+  omitted as we're simply concerned with parsing.  
+
+  The example code in the following document is completely
+  self-contained, and does not require an installation of the smug
+  library.
+
+  In some cases, the natural name for a parser conflicts with a name
+  in the COMMON-LISP package. In those cases, rather then shadow the
+  symbols, i've chosen to prefix those names with a #\= character. It
+  is thought that this aids usability, as one can simply
+  (:use :smug).
+
+  No prior experience with functional programming, monads or recursive
+  descent parsing is assumed. The only requirements are an ANSI
+  common lisp environment, and a burning desire to find a better way
+  to parse.
+
+** Introduction 
+
+  This tutorial, like this library, is based on an approach to
+  building parsers using higher-order functions (combinators) that is
+  popular in the functional programming community. Incidentally, these
+  parsers form an instance of something called a monad, which is
+  itself a useful construct with implications beyond parsing.
+
+  With great debt to Monadic Parser Combinators[fn:1], the paper from
+  which this library is derived, this tutorial presents a step by step
+  introduction to the topics of parser combinators and monads and
+  their use in common lisp.
+
+** How To Combine Parsers
+
+#+BEGIN_QUOTE 
+   A Parser for Things
+   is a functions from Strings
+   to Lists of Pairs
+   of Things and Strings!
+   --- Fritz Ruehr, Willamette University [fn:2]
+#+END_QUOTE 
+
+   A parser is something that is familiar to all programmers... a
+   function that, given a series of tokens as input, produces a data
+   structure that relates to the grammatical structure of the input in
+   some way. Or, to put it simply, a function from strings to things.
+   
+#+BEGIN_SRC lisp
+ ;; our fictional parser matches the string "string" 
+ ;; and returns an instance of THING
+
+(parse-thing "string") => #<THING>
+#+END_SRC
+   
+   In order to combine simple parsers into larger more complex ones,
+   they need a way to communicate between them. First, because any
+   given parser might consume only a part of the input, we'll have our
+   parser return a cons with the result in the CAR and the remaining
+   input in the CDR.
+
+#+BEGIN_SRC lisp
+(parse-thing "string string") => (#<THING> . " string")
+#+END_SRC lisp
+
+   Because a parser may return multiple results when the
+   grammar is ambiguous, or may return no results all, we'll put our
+   conses in a list, and have the empty list, NIL, denote a failed
+   parse.
+
+#+BEGIN_SRC lisp
+(parse-thing "string string") => ((#<THING> . " string"))
+(parse-thing "strong string") => NIL
+#+END_SRC
+
+  So, for our purposes, a parser is just a function that takes a
+  single value as the input and returns a list of conses of results
+  and unconsumed input.
+  
+  It is this trivial protocol that allows us to combine small simple
+  parsers into larger more useful ones.
+
+** Reading Input
+
+   Smug parsers allow infinite look-ahead and backtracking. To support
+   parsing many different things, it's useful to define an input
+   protocol. Smug parsers only require three operations on input :
+   INPUT-FIRST, INPUT-REST and INPUT-EMPTY-P. We'll define them in
+   terms of strings. This is not a particularly efficient
+   implementation, but it serves our purposes.
+
+#+BEGIN_SRC lisp
+(defmethod input-empty-p ((input string))  
+  (zerop (length input)))
+
+(defmethod input-first ((input string))
+  (aref input 0))
+
+(defmethod input-rest ((input string))
+  (make-array (1- (length input))
+	      :displaced-to input
+	      :displaced-index-offset 1
+	      :element-type (array-element-type input)))
+
+(input-empty-p "") => t
+(input-empty-p "foo") => nil
+(input-first "foo") => #\f
+(input-rest "foo") => "oo"
+#+END_SRC
+
+** The Three Primitive Parsers
+
+   There are 3 simple primitive parsers. It it only necessary to
+   understand them, and one sequencing combinator, BIND, to understand
+   all of smug.
+
+*** RESULT
+
+    The first parser is RESULT, which always succeeds by returning the
+    value passed to it,  and does not consume any input. Because we've
+    earlier defined parsers as functions that take a single argument
+    we'll curry the input parameter.
+
+#+BEGIN_SRC lisp
+(defun result (value)
+(lambda (input)
+    (list (cons value input))))
+
+(funcall (result :foo) "bar baz") => ((:foo . "bar baz"))
+#+END_SRC
+
+*** FAIL 
+
+    The second parser, FAIL, is the inverse of RESULT. It simply fails
+    regardless of the input. we could define FAIL as a function that
+    takes a single argument, but then we'd have to access it using
+    FUNCTION (#'), and aesthetically that inconsistency is
+    undesirable, so we'll again curry the input parameter.
+
+#+BEGIN_SRC lisp
+(defun fail ()
+  (constantly nil))
+
+(funcall (fail) "foo") => NIL
+#+END_SRC
+
+*** ITEM
+
+    The last true primitive is ITEM, which is a parser that consumes
+    the first token in the input, or fails in the input is empty.
+
+#+BEGIN_SRC lisp
+(defun item ()
+  (lambda (input)
+    (unless (input-empty-p input)
+      (list (cons (input-first input)
+		  (input-rest input))))))
+
+(funcall (item) "foo") => ((#\f . "oo"))
+(funcall (item) "") => NIL
+#+END_SRC
+
+** BIND, Our First Combinator
+
+   Now that we have our primitive parsers, we need a way to combine
+   them. We'd like to be able to apply parsers in sequence, and it
+   would also come in handy if we could give names to the intermediate
+   results of parsers. Both these requirements are fulfilled by using
+   the monadic sequencing operator, BIND.
+
+   BIND is a function that takes as arguments a parser P, and a
+   function F which take a value and returns a parser P2. BIND returns
+   a parser that first applies P to the input, returning a list of
+   (VALUE . INPUT) pairs. The the function F is applied to each VALUE,
+   and the result P2 then applied to the INPUT. The collected lists of
+   pairs returned from the P2's are then concatenated and the result
+   returned.
+
+#+BEGIN_SRC lisp
+(defun bind (parser function)
+  (lambda (input)
+    (loop :for (value . input) :in (funcall parser input)
+          :append (funcall (funcall function value) input))))
+
+(let ((char-token
+       (bind (item) 
+	     (lambda (char) 
+	       (result (list :char char))))))		
+  (funcall char-token "foo"))
+=> (((:CHAR #\f) . "oo"))
+#+END_SRC
+
+   Because BIND itself returns a parser, the result of a BIND can be
+   returned as P2. This allows parsers to be chained, and allows us to
+   use LAMBDA to provide names for the values of parser results. For
+   example, the following parser uses BIND to return the first two
+   characters as a cons.
+
+#+BEGIN_SRC lisp
+(let ((two-chars 
+       (bind (item) 
+	     (lambda (char) 
+	       (bind (item) 
+		     (lambda (char2) 
+		       (result (cons char char2))))))))
+  (funcall two-chars "asd"))
+=> (((#\a . #\s) . "d"))
+#+END_SRC
+
+   The next section gets into some details about why our parser is a
+   monad.  You don't really need to know this, so feel free to [[**Some%20Parsers%20Using%20Bind][skip it]]
+   if you're in a hurry.
+
+*** A quick word on monads
+
+    By virtue of having the functions BIND and RESULT defined as they
+    are, our parser interface forms a monad. A monad is, essentially,
+    a category of things that provide the functions BIND and RESULT.
+    
+    Of course, just having functions called BIND and RESULT does not a
+    monad make. There are other contracts that BIND (also known as
+    pipe, >>=, *, or let) or RESULT (aka lift, unit, return) must
+    fulfil.
+
+**** The monad laws
+
+     In order to be properly categorized as a monad, the thing
+     providing a definition for BIND and RESULT must obey three laws
+     (a static functional programmer would say 'must have a certain
+     type', but the word type means something different to a dynamic
+     functional programmer, so we'll avoid it here)
+
+     In order to describe those laws we need to define a few terms
+
+     - Monadic Value (MV) :: a function that, given a value, returns a
+          value in the form expected by the internals of BIND. In our
+          examples above, a parser (taking an input and returning a
+          list of results) is the Monadic Value.
+
+     - Monadic Function (MF) :: A function that, given a value returns
+          a monadic value encapsulating that value. RESULT is the
+          canonical Monadic Function
+     
+     In Object-Oriented terms, the MF is a constructor, and the MV an
+     object.
+
+     The laws which all things must obey in order to be called a monad
+     are simple :
+
+     - "Left identity" ::  (bind (result x) MF) = (funcall MF x)
+
+     - "Right identity" :: (bind MV result) = MV
+
+     - "Associativity" ::  (bind (bind MV MF) MF2) 
+	  = (bind MV (lambda (x) (bind (MF x) MF2)))
+     
+     With static type systems, the compiler will enforce this contract
+     for you. In a dynamic system, we just need to be a little more
+     careful. Proving the monad laws for our BIND and RESULT is
+     left as an exercise.
+
+     That's really all there is to monads except for syntax, which
+     we'll get to later. There are extended laws that other monads
+     obey, and monads have other uses beyond parsing, but we're
+     reaching the end of our scope already.
+
+** =satisfies  : the parser predicate
+
+    Often, we only want to consume input if a certain
+    condition is true. This where =SATISFIES comes in.
+
+#+BEGIN_SRC lisp
+(defun =satisfies (predicate)
+  (bind (item) 
+	(lambda (x) 
+	  (if (funcall predicate x)
+	      (result x)
+	      (fail)))))
+
+(funcall (=satisfies #'digit-char-p) "1 and")
+=> ((#\1 . " and"))
+#+END_SRC
+
+   If ITEM fails, so will the =SATISFIES parser. This is because (bind
+   (fail) MF) will always fail. FAIL, also known as zero, is a function
+   belonging to a category of monads knows as "monads with a
+   zero". That's not terribly important for parsing, but interesting if
+   you're into that sort of thing.
+
+*** Example Parsers for letters and numbers using =SATISFIES
+
+     =SATISFIES allows us to defun some simple parsers
+
+#+BEGIN_SRC lisp
+(defun =char (x)
+  (=satisfies (lambda (y) (eql x y))))
+
+(defun =digit-char ()
+  (=satisfies #'digit-char-p))
+
+(defun lower-case-char ()
+  (=satisfies #'lower-case-p))
+
+(defun upper-case-char ()
+  (=satisfies #'upper-case-p))
+
+(funcall (=char #\x) "xyzzy") => ((#\x . "yzzy"))
+(funcall (digit) "1234") => ((#\1 . "234"))
+(funcall (lower-case-char) "abcd") => ((#\a . "bcd"))
+(funcall (upper-case-char) "Abcd") => ((#\A . "bcd"))
+#+END_SRC
+
+** PLUS, the non-deterministic choice combinator
+
+   If we want to combine our earlier parsers, say to create an
+   ALPHANUMERIC-CHAR from UPPER-CASE-CHAR and LOWER-CASE-CHAR, we need
+   a combinator capable of making the choice between them.
+
+   In some cases, it may not be an exclusive choice. There might be
+   multiple ways to parse a string, or a later pass might resolve the
+   ambiguity.
+
+   For example, in one of our earlier examples of BIND, we saw a
+   parser that returned the first two characters in a stream. This
+   parser will fail if there is only one character left in the input.
+
+#+BEGIN_SRC lisp
+(let ((two-chars 
+       (bind (item) 
+	     (lambda (char) 
+	       (bind (item) 
+		     (lambda (char2) 
+		       (result (cons char char2))))))))
+  (funcall two-chars "a"))
+=> NIL
+#+END_SRC   
+
+  If we want to parse one or two characters, or an arbitrarily long
+  series of characters, we need some a way to express that.
+
+  Enter the PLUS combinator.
+
+#+BEGIN_SRC lisp
+(defun plus (p1 p2)
+  (lambda (input)
+    (append (funcall p1 input) (funcall p2 input))))
+
+(let ((two-chars 
+       (bind (item) 
+	     (lambda (char) 
+	       (bind (item) 
+		     (lambda (char2) 
+		       (result (cons char char2))))))))
+
+  (funcall (plus two-chars (item)) "a") 
+  => ((#\a . "")) 
+  (funcall (plus two-chars (item)) "asd")) 
+  => (((#\a . #\s) . "d") (#\a . "sd"))
+#+END_SRC
+
+  Note that the second parse returned two pairs, as both parsers were
+  successful... the string parsed as both two chars and a single item.
+
+*** Example parsers using PLUS
+
+    The examples used in the original paper[fn:1] are for letters and
+    alphanumeric characters. There's no good reason to use them over
+    /(=satisfies #'alpha-char-p)/ and the like, but they do serve as a
+    simple example.
+
+#+BEGIN_SRC lisp
+(defun letter () (plus (lower-case-char) (upper-case-char)))
+
+(funcall (letter) "foo") => ((#\f . "oo"))
+(funcall (letter) "1foo") => NIL
+
+(defun alphanumeric () (plus (letter) (=digit-char)))
+
+(funcall (alphanumeric) "1foo") => ((#\1 . "foo"))
+(funcall (alphanumeric) "!1foo") => NIL
+#+END_SRC
+
+  The other example is more illustrative, a parser that returns a
+  series of letters or the empty string.
+
+#+BEGIN_SRC lisp
+(defun word ()
+  (let ((non-empty-letters 
+	 (bind (letter) 
+	       (lambda (first-letter) 
+		 (bind (word)
+		       (lambda (rest-of-letters)
+			 (result (format nil "~A~A" 
+					 first-letter
+					 rest-of-letters))))))))
+    (plus non-empty-letters (result ""))))
+
+(funcall (word) "asd")
+=>
+(("asd" . "") ("as" . "d") ("a" . "sd") ("" . "asd"))
+
+#+END_SRC
+
+  This is our first recursive parser, but it's a common idiom. Notice
+  that it returns all the possible strings of letters. This is
+  obviously inefficient when one only requires the first value.
+  required, a deterministic combinator =OR, will be introduced later
+  in the tutorial.
+
+** Syntax : LET* and the identity monad
+
+   If you read the earlier section on monads, you'd know that BIND and
+RESULT are the interface to many different types of monads, of which
+our parser is but one example. If you didn't, you know now. Again, if
+you're not at all interested and really just want to keep on parsing,
+[[*** =LET*, our version of LET* like do notation ][skip down to the macro]].
+
+   The most basic monad is the identity monad. A definition of
+   its BIND and RESULT might look like the following.
+
+#+BEGIN_SRC lisp
+
+(defun i-bind (mv mf) (funcall mf mv))
+(defun i-result (value) value)
+
+#+END_SRC
+
+    In Lisp, the identity monad is so trivial as to be useless. In a
+    functional programming language, or any language where the order
+    of operations is not guaranteed, the identity monad serves to
+    sequence operations.
+
+    Imagine a silly lisp where the order of evaluation isn't defined
+    as strict left to right[fn:3]. The following form could have
+    disastrous consequences.
+
+#+BEGIN_SRC lisp
+
+(progn (remove-gun-from-pants)
+       (point-gun-at-bad-guy)
+       (pull-trigger))
+
+#+END_SRC
+
+   The identity monad makes the sequencing explicit. In a purely
+   functional lisp, one might sequence the operations as follows.
+
+#+BEGIN_SRC lisp
+(i-bind (remove-gun-from-pants) 
+      (lambda (gun)
+	(i-bind (point-gun-at-bad-guy gun)
+	      (lambda (pointed-gun)
+	      (i-bind (pull-trigger pointed-gun)
+		      (lambda (fired-gun)
+			(i-result fired-gun)))))))
+#+END_SRC
+
+   In functional programming languages this pattern is so common that
+   there is special syntax for it. The usual choices are 'do notation'
+   or 'list comprehension syntax'.
+
+   First, the previous example rendered in list comprehension
+   notation :
+
+#+BEGIN_SRC haskell
+[fgun | gun <- removeGun 
+      , pgun <- pointGunAtBadGuy gun
+      , fgun <- pullTrigger pgun] 
+        
+#+END_SRC
+
+   And in do notation :
+
+#+BEGIN_SRC haskell
+do 
+  gun <- removeGun 
+  pgun <- pointGunAtBadGuy
+  fgun <- pullTrigger pgun
+  return fgun
+#+END_SRC
+
+   The astute lisper might notice that do notation looks a lot like
+   LET*. In fact, that's really all it is. LET* is lisp syntax for the
+   identity monad, and our i-bind using forms above are directly
+   translatable.
+
+#+BEGIN_SRC lisp 
+(let* ((gun (remove-gun-from-pants))
+       (pointed-gun (point-gun-at-bad-guy gun))
+       (fired-gun (pull-trigger pointed-gun)))
+  (identity fired-gun))
+#+BEGIN_SRC
+
+  One could legitimately say that the common lisp package is an
+  instance of the identity monad, if one cared for such insights.
+
+*** =LET*, our version of LET* like do notation
+
+    A LET* like construct is the obvious notation for a lisper to take
+    advantage of the monadic nature of parsers. It's often useful to
+    ignore a value. In haskell, the underscore character is used to
+    denote an ignorable variable, so we'll use the same convention.
+
+#+BEGIN_SRC lisp
+(defmacro =let* (bindings &body body)
+  (if bindings
+      (let ((symbol (first (first bindings))))
+	`(bind ,@(cdr (first bindings))
+	       (lambda (,symbol)
+		 ,@(when (string-equal (symbol-name symbol) "_")
+			 `((declare (ignorable ,symbol))))
+		 (=let* ,(cdr bindings)
+		   ,@body))))
+      `(progn ,@body)))
+#+END_SRC
+
+If we replace BIND with our I-BIND function above, we get a macro that
+is equivalent to LET*. =LET* binds the results of parsers, and is a
+much nicer way to work than nesting BINDs.
+
+*** Examples using =LET*
+
+    Using recursion like we did in our WORD parser, we'll create a
+    parser that matches a specific string.
+
+#+BEGIN_SRC lisp
+(defun =string (string)
+  (if (input-empty-p string)
+      (result "")
+      (=let* 
+	  ((_ (=char (input-first string)))
+	   (_ (=string (input-rest string))))
+	(result string))))
+
+(funcall (=string "asdf")  "asdfjkl") => (("asdf" . "jkl"))
+(funcall (=string "asdf")  "asd") => NIL
+#+END_SRC
+
+    Once can see how much nicer =LET* notation is, and also how the
+    ignorable _ comes in handy. 
+
+** =OR, =NOT, and =AND : deterministic logic combinators
+
+   =OR is a deterministic PLUS. It take any number of parsers. The
+   first parser is run, and if it succeeds, evaluation short circuits
+   and the result of the parser is returned. Otherwise, the next
+   parser is run, and so on, until one succeeds or there are no more
+   parsers. 
+   
+   We can't use BIND or =LET* for =OR because it would fail if one of
+   its parsers fails. As such, =OR must be a primitive.
+
+#+BEGIN_SRC lisp
+(defun =or (parser &rest parsers)
+  (lambda (input)
+    (or (funcall parser input) 
+	(when parsers 
+	  (funcall (apply #'=or parsers) input)))))
+#+END_SRC 
+
+   Similarly, =NOT, which continues parsing only when the parser
+   fails, is primitive as well.
+
+#+BEGIN_SRC lisp
+(defun =not (parser)
+  (lambda (input)
+    (let ((result (funcall parser input)))
+      (if result
+	  nil
+	  (list (cons t input))))))
+#+END_SRC
+
+   On the other hand, =AND can be defined in terms of =IF*, and
+   doesn't even need to test for failure, as BIND handles failure
+   automatically.
+
+   =AND (known as '>>' in haskell) sequentially composes parsers,
+   discarding the results of all but the last one, and returning that
+   result.
+
+#+BEGIN_SRC lisp
+  
+(defun =and (p1 &rest ps)
+  (=let* ((result p1))
+    (if ps
+	(apply #'=and ps)
+	(result result))))
+
+#+END_SRC
+
+*** Examples using  =OR, =NOT, and =AND
+
+    Now that we have =NOT, we can specifically test for failure rather
+    than abort the parse entirely. since the primitive parser ITEM
+    only fails when the input is empty, we can define NO-MORE-INPUT by
+    negating it.
+
+#+BEGIN_SRC
+(defun no-more-input ()
+ (=not (item)))
+#+END_SRC
+    
+    Using =AND, we can implement =PROGN (which is really just =AND
+    because it will fail when the parser does), =PROG1 (which comes in
+    handy for matching things and the end of the line, or when there
+    is no more input) and =PROG2, which as we will see is also quite useful.
+    
+#+BEGIN_SRC lisp
+(defun =progn (&rest parsers)
+  (apply #'=and parsers))
+
+(defun =prog1 (parser &rest parsers)
+  (=let* ((result parser)
+	  (_ (apply #'=and parsers)))
+    (result result)))
+
+(defun =prog2 (parser1 parser2 &rest parsers)
+  (=and parser1 (apply #'=prog1 parser2 parsers)))
+
+
+#+END_SRC
+
+  The MAYBE combinator, which allows a parser to fail and still
+  continue, is a natural use of =OR.  
+
+#+BEGIN_SRC lisp
+
+(defun maybe (parser)
+  (=or parser (result nil)))
+
+#+END_SRC 
+
+  Finally, using =OR, =AND and =NOT, we can make parser versions of
+  the lisp conditionals we all know and love.
+
+#+BEGIN_SRC 
+
+(defun =if (test-parser then-parser &optional (else-parser (result nil)))
+  (=or (=and test-parser then-parser)
+       else-parser))
+
+(defun =when (test-parser then-parser)
+   "we define =when in terms of IF, but it's really just =AND again"
+  (=if test-parser then-parser))
+
+(defun =unless (test-parser then-parser)
+   "defined in term of =when, even though it's just (=AND (=NOT ...))"
+  (=when (=not test-parser) then-parser))
+
+#+END_SRC
+
+    
+** ZERO-OR-MORE, ONE-OR-MORE  : The repetition combinators
+   
+   Earlier, we defined a parser, WORD, using BIND and a recursive
+   call. Lets define a similar parser using =LET* that returns a list
+   of letters.
+
+#+BEGIN_SRC lisp
+(defun letters ()
+  (=or (=let* ((x (letter))
+	       (xs (letters)))
+	 (result (cons x xs)))
+       (result nil)))
+#+END_SRC 
+
+   This pattern can easily be abstracted into a more general
+   combinator, ZERO-OR-MORE
+
+#+BEGIN_SRC lisp
+(defun zero-or-more (parser)
+  (=or (=let* ((x parser)
+	       (xs (zero-or-more parser)))
+	 (result (cons x xs)))
+       (result nil)))
+
+(funcall (zero-or-more (=char #\a)) "aaaab")
+=>
+(((#\a #\a #\a #\a) . "b"))
+
+(funcall (zero-or-more (=char #\a)) "bbbba")
+=>
+((NIL . "bbbba"))
+#+END_SRC 
+
+   Note that zero or more always succeeds. If one needs a parser that
+   matches one or more items and fails otherwise, we can define one in
+   terms of ZERO-OR-MORE, can call it, appropriately enough,
+   ONE-OR-MORE.
+
+#+BEGIN_SRC
+(defun one-or-more (parser)
+  (=let* ((x parser)
+	  (y (zero-or-more parser)))
+    (result (cons x y))))
+
+(funcall (one-or-more (=char #\a)) "aaaab")
+=>
+(((#\a #\a #\a #\a) . "b"))
+
+(funcall (one-or-more (=char #\a)) "bbbba")
+=>
+NIL
+#+END_SRC 
+
+*** Examples using ZERO-OR-MORE and ONE-OR-MORE
+
+    First, lets make a parser for standard quoted strings. We'll use
+    the #\' character as the quotes, and the #\| character as the
+    escape character, simply to make it easier to embed in our example
+    text in common lisp strings.
+
+
+#+BEGIN_SRC lisp 
+(defun quoted-string (&key (quote (=char #\'))
+                           (escape (=char #\|)))					 
+  (let ((escaped-char (=and escape (item)))
+	(string-char (=and (=not quote) (item))))
+    (=let* ((chars (=prog2 (=char #\') 
+			   (zero-or-more
+			    (=or escaped-char
+				 string-char))
+			   (=char #\'))))
+      (result (coerce chars 'string)))))
+
+(funcall (quoted-string) "'The quote char is |' and the escape char is ||.'")
+=>		   
+(("The quote char is ' and the escape char is |." . ""))
+#+END_SRC
+
+
+
+
+  
+
+
+* footnotes	 
+[fn:1] Monadic parser combinators (pdf, ps, bibtex) Graham Hutton and
+Erik Meijer. Technical Report NOTTCS-TR-96-4, Department of Computer
+Science, University of
+Nottingham, 1996. http://www.cs.nott.ac.uk/~gmh/bib.html#monparsing
+
+[fn:2] http://www.willamette.edu/~fruehr/haskell/seuss.html 
+
+[fn:3] like, say, scheme
+
+
+#(end-lisp)
+
+
+
+
+
+
+
+
+
+
