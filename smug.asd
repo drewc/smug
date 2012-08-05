@@ -3,6 +3,5 @@
 (asdf:defsystem #:smug
   :serial t
   :components ((:file "package")
-	       (:file "input")
+               (:file "input")
                (:file "smug")))
-

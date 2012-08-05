@@ -539,7 +539,7 @@ do
        (pointed-gun (point-gun-at-bad-guy gun))
        (fired-gun (pull-trigger pointed-gun)))
   (identity fired-gun))
-#+BEGIN_SRC
+#+END_SRC
 
   One could legitimately say that the common lisp package is an
   instance of the identity monad, if one cared for such insights.
@@ -550,18 +550,23 @@ do
     advantage of the monadic nature of parsers. It's often useful to
     ignore a value. In haskell, the underscore character is used to
     denote an ignorable variable, so we'll use the same convention.
+    As a convenience, the underscore may be omitted. 
 
 #+BEGIN_SRC lisp
 (defmacro =let* (bindings &body body)
   (if bindings
       (let ((symbol (first (first bindings))))
-	`(bind ,@(cdr (first bindings))
-	       (lambda (,symbol)
-		 ,@(when (string-equal (symbol-name symbol) "_")
-			 `((declare (ignorable ,symbol))))
-		 (=let* ,(cdr bindings)
-		   ,@body))))
+        (when (listp symbol)
+          (setf bindings (cons (list '_ symbol) (cdr bindings))
+                symbol '_))
+        `(bind ,@(cdr (first bindings))
+               (lambda (,symbol)
+                 ,@(when (string-equal (symbol-name symbol) "_")
+                         `((declare (ignorable ,symbol))))
+                 (=let* ,(cdr bindings)
+                        ,@body))))
       `(progn ,@body)))
+
 #+END_SRC
 
 If we replace BIND with our I-BIND function above, we get a macro that
@@ -579,7 +584,7 @@ much nicer way to work than nesting BINDs.
       (result "")
       (=let* 
 	  ((_ (=char (input-first string)))
-	   (_ (=string (input-rest string))))
+	   ((=string (input-rest string))))
 	(result string))))
 
 (funcall (=string "asdf")  "asdfjkl") => (("asdf" . "jkl"))
@@ -796,13 +801,3 @@ Nottingham, 1996. http://www.cs.nott.ac.uk/~gmh/bib.html#monparsing
 
 
 #(end-lisp)
-
-
-
-
-
-
-
-
-
-
