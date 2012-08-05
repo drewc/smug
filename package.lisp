@@ -49,4 +49,3 @@
 
 (defpackage :smug.examples 
   (:use :cl :smug))
-
