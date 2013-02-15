@@ -196,7 +196,7 @@
 	       (zero-to limit parser))
 	   (zero-or-more parser)))
     (t (=let* ((x parser)
-	       (xs (at-least (1- n) parser :limit (1- limit))))
+	       (xs (at-least (1- n) parser :limit (and limit (1- limit)))))
 	 (result (cons x xs))))))
 
 (defun exactly (n parser)
