@@ -12,6 +12,11 @@
 (defgeneric input-rest (input)
   (:method ((input cl:string))
     (declare (optimize (speed 3)))
+    (when (not
+	   (eql (array-element-type input)
+		(upgraded-array-element-type 'character)))
+      (setf input (make-array (length input) :element-type 'character
+			       :initial-contents input)))
     (multiple-value-bind (string index)
 	(array-displacement input)
       (let ((original-string (or string input)))
