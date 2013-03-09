@@ -1,5 +1,7 @@
 #+TITLE: Monadic Parser Combinators
-#+AUTHOR: "Graham Hutton /University of Nottingham/ | Erik Meijer /University of Utrecht/
+
+Graham Hutton /University of Nottingham/ 
+Erik Meijer /University of Utrecht/ 
 
 Appears as technical report NOTTCS-TR-96-4,
 Department of Computer Science, University of Nottingham, 1996
@@ -14,7 +16,7 @@ form an instance of a monad , an algebraic structure from mathematics
 that has proved useful for addressing a number of computational
 problems. The purpose of this article is to provide a step-by-step
 tutorial on the monadic approach to building functional parsers, and
-to explain some of the beneﬁts that result from exploiting monads. No
+to explain some of the benefits that result from exploiting monads. No
 prior knowledge of parser combinators or of monads is assumed. Indeed,
 this article can also be viewed as a first introduction to the use of
 monads in programming.
@@ -69,7 +71,7 @@ used. Any other lazy functional language that supports
 (multi-parameter) constructor classes and the use of monad
 comprehension notation would do equally well. No prior knowledge of
 parser combinators or monads is assumed. Indeed, this article can also
-be viewed as a ﬁrst introduction to the use of monads in
+be viewed as a first introduction to the use of monads in
 programming. A library of monadic parser combinators taken from this
 article is available from the authors, via the World-Wide-Web.
 
@@ -80,6 +82,7 @@ We begin by reviewing the basic ideas of combinator parsing (Wadler, 1985; Hutto
 parsers, and two primitive combinators for building larger parsers.
 
 ** The type of parsers
+
 Let us start by thinking of a parser as a function that takes a string of characters as
 input and yields some kind of tree as result, with the intention that the tree makes
 explicit the grammatical structure of the string:
@@ -136,9 +139,9 @@ result v = \inp -> [(v,inp)]
 
 #+name: lisp result
 #+begin_src lisp
-  (defun result (value)
-    (lambda (input)
-      (list (cons value input))))
+    (defun result (value)
+      (lambda (input) 
+        (list (cons value input))))
 #+end_src
 
 #+name: test lisp result
@@ -147,7 +150,7 @@ result v = \inp -> [(v,inp)]
                  (funcall (result 1) "asd")))
 #+end_src
 
-An expression of the form \x -> e is called a λ-abstraction, and
+An expression of the form *\x -> e* is called a λ-abstraction, and
 denotes the function that takes an argument x and returns the value of
 the expression e. Thus result v is the function that takes an input
 string inp and returns the singleton list [(v,inp)]. This function
@@ -191,9 +194,10 @@ item = \inp -> case inp of
     (lambda (input)
       (etypecase input 
         (null nil)
-        (string 
-         (list (cons (aref input 0)
-                     (subseq input 1)))))))
+        (string
+         (unless (equal input "")
+           (list (cons (aref input 0)
+                       (subseq input 1))))))))
 #+end_src
 
 #+name: test lisp item
@@ -201,6 +205,11 @@ item = \inp -> case inp of
   (assert (equal '((#\a . "sd"))
                  (funcall (item) "asd")))
   
+  (assert (equal '((#\a . ""))
+                 (funcall (item) "a")))
+  
+  (assert (null
+           (funcall (item) "")))
 #+end_src
 
 ** Parser combinators
@@ -280,21 +289,26 @@ the parser p is applied to the input string, yielding a list of
 (value,string) pairs. Now since f is a function that takes a value and
 returns a parser, it can be applied to each value (and unconsumed
 input string) in turn. This results in a list of lists of
-(value,string) pairs, that can then be ﬂattened to a single list using
+(value,string) pairs, that can then be flattened to a single list using
 concat.
 
-The bind combinator avoids the problem of nested tuples of results because the
-results of the first parser are made directly available for processing by the second,
-rather than being paired up with the other results to be processed later on. A
-typical parser built using bind has the following structure
+The bind combinator avoids the problem of nested tuples of results
+because the results of the first parser are made directly available
+for processing by the second, rather than being paired up with the
+other results to be processed later on. A typical parser built using
+bind has the following structure
 
-p1 ‘bind‘ \x1 ->
-p2 ‘bind‘ \x2 ->
-...
-pn ‘bind‘ \xn ->
-result (f x1 x2 ... xn)
+#+begin_src haskell
+  p1 ‘bind‘ \x1 ->
+  p2 ‘bind‘ \x2 ->
+  ...
+  pn ‘bind‘ \xn ->
+  result (f x1 x2 ... xn)
+#+end_src
 
-#+name: lisp test bind
+#+HTML: <br/>
+
+#+NAME: lisp test bind
 #+begin_src lisp
   (bind 
    p1 
@@ -380,19 +394,22 @@ Using sat, we can define parsers for specific characters, single digits, lower-c
 letters, and upper-case letters:
 
 #+begin_src haskell
-char :: Char -> Parser Char
-char x = sat (\y -> x == y)
-
-digit :: Parser Char
-digit = sat (\x -> ’0’ <= x && x <= ’9’)
-
-lower :: Parser Char
-lower = sat (\x -> ’a’ <= x && x <= ’z’)
-
-upper :: Parser Char
-upper = sat (\x -> ’A’ <= x && x <= ’Z’)
+  char :: Char -> Parser Char
+  char x = sat (\y -> x == y)
+  
+  digit :: Parser Char
+  digit = sat (\x -> ’0’ <= x && x <= ’9’)
+  
+  lower :: Parser Char
+  lower = sat (\x -> ’a’ <= x && x <= ’z’)
+  
+  upper :: Parser Char
+  upper = sat (\x -> ’A’ <= x && x <= ’Z’)
 #+end_src
 
+#+begin_quote
+
+#+end_quote
 
 #+name: lisp predicates for satisfies 
 #+begin_src lisp
@@ -408,12 +425,12 @@ upper = sat (\x -> ’A’ <= x && x <= ’Z’)
   (defun lower ()
     (satisfies (lambda (x) 
                  (and (char<= #\a x)
-                      (char>= x #\z)))))
+                      (char>= #\z x)))))
   
   (defun upper ()
     (satisfies (lambda (x) 
                  (and (char<= #\A x)
-                      (char>= x #\Z)))))
+                      (char>= #\Z x)))))
   
 #+end_src
 
@@ -455,9 +472,9 @@ result [x,y]
 #+end_src
 
 Applying this parser to the string "abcd" succeeds with the result
-*[("ab","cd")]*.  Applying the same parser to "aBcd" fails with the
+*[("ab","cd")]*.  Applying the same parser to *\-"aBcd\-* fails with the
 result *[]*, because even though the initial letter *’a’* can be
-consumed by the first lower parser, the following letter ’B’ cannot be
+consumed by the first lower parser, the following letter *’B’* cannot be
 consumed by the second lower parser.
 
 #+name: test lisp test string of length two
@@ -684,6 +701,19 @@ p ‘bind‘ f = \inp -> concat [f v out | (v,out) <- p inp]
     (:singleton))
 #+end_src
 
+#+begin_src lisp
+  (macroexpand-1 
+   '(define-interface <parser> (<monad>) 
+     ()
+     (:singleton)))
+  ;; =>
+  (PROGN
+   (DEFCLASS <PARSER> (<MONAD>) NIL)
+   (DEFVAR <PARSER> (MAKE-INSTANCE '<PARSER>))
+   (DEFMETHOD INTERFACE-OPTIONS APPEND ((<I> <PARSER>)) '((:SINGLETON))))
+  
+#+end_src
+
 #+name: lisp <parser> result and bind definition
 #+begin_src lisp
   (defmethod result ((<p> <parser>) value)
@@ -739,11 +769,8 @@ zero :: m a
   (define-interface <monad-zero-plus> (<monad> <zero-plus>)
       ()
       (:generic guard (<interface> 
-                       value predicate
-                       &rest predicate-args))
-      (:generic plus (<interface> 
-                      interface-value-1
-                      interface-value-2)))
+                       predicate value
+                       &rest predicate-args)))
   
 #+end_src
 
@@ -834,58 +861,59 @@ allowing them to be expressed in the following, more appealing form:
 
 #+name: lisp mlet*
 #+begin_src lisp 
-    (defmacro mlet* (monad bindings &body body)
-      (let ((m (gensym)))
-        `(let ((,m ,monad))
-           (flet ,(loop :for (name . args) 
-                     :in (interface-options (symbol-value monad))
-                     :when (and (eq name :generic)
-                                (not (eq (first args) 'interface-options)))
-                     :collect `(,(first args) (&rest args)
-                                 (apply ',(first args) ,m args)))
-             ,@(if bindings 
-                   (list  (loop 
-                             :for (variable monadic-form)
-                             :in bindings 
-                             :collect `(bind ,monadic-form 
-                                             (lambda (,variable) 
-                                               ,@(when (string= variable "_")
-                                                       `((declare (ignorable ,variable)))))) 
-                             :into b
-                             :finally (return 
-                                        (loop for (form . rest) on b
-                                           :do 
-                                             (setf (cdr (car (last form))) 
-                                                   (append  (cdr (car (last form)))
-                                                               (if rest (list (first rest)) body)))
-                                           :finally (return (first b))))))
-                   body)))))
-  
-  ;; (macroexpand-1 '(mlet* <parser> ((a (plus (result 1) (item)))
-  ;;                                  (b (plus (item) (zero))))
-  ;;                   (result (cons a b))))
-  ;; =>
-  ;; (LET ((#:G1555 <PARSER>))
-  ;;   (FLET ((ITEM (&REST ARGS)
-  ;;            (APPLY 'ITEM #:G1555 ARGS))
-  ;;          (RESULT (&REST ARGS)
-  ;;            (APPLY 'RESULT #:G1555 ARGS))
-  ;;          (BIND (&REST ARGS)
-  ;;            (APPLY 'BIND #:G1555 ARGS))
-  ;;          (ZERO (&REST ARGS)
-  ;;            (APPLY 'ZERO #:G1555 ARGS))
-  ;;          (PLUS (&REST ARGS)
-  ;;            (APPLY 'PLUS #:G1555 ARGS)))
-  ;;     (BIND (PLUS (RESULT 1) (ITEM))
-  ;;           (LAMBDA (A)
-  ;;             (BIND (PLUS (ITEM) (ZERO)) 
-  ;;                   (LAMBDA (B) 
-  ;;                     (RESULT (CONS A B))))))))
+      (defmacro mlet* (monad bindings &body body)
+        (if monad     
+            (let ((m (gensym)))
+              `(let ((,m ,monad))
+                 (flet ,(loop :for (name . args) 
+                           :in (interface-options (symbol-value monad))
+                           :when (and (eq name :generic)
+                                      (not (eq (first args) 
+                                               'interface-options)))
+                           :collect `(,(first args) (&rest args)
+                                       (apply ',(first args) ,m args)))
+                   (mlet* nil ,bindings ,@body))))
+            (if bindings 
+                (destructuring-bind ((var form) &rest bindings)
+                    bindings
+                  `(bind ,form (lambda (,var) 
+                                 ,@(when (string= var "_")
+                                        `((declare (ignorable ,var))))
     
-  
+                                 (mlet* nil ,bindings
+                                        ,@body))))
+                `(progn ,@body))))  
 #+end_src
 
-
+#+name: lisp macroexpand-all mlet* 
+#+begin_src lisp 
+  (#.(first (apropos-list "macroexpand-all")) 
+                                     '(mlet* <parser> ((a (plus (result 1) (item)))
+                                                       (_ (guard #'numberp a))
+                                                       (b (plus (item) (zero))))
+                                       (result (cons a b))))
+  ;; =>
+  (LET ((#:G1462 <PARSER>))
+    (FLET ((ITEM (&REST ARGS)
+             (APPLY 'ITEM #:G1462 ARGS))
+           (GUARD (&REST ARGS)
+             (APPLY 'GUARD #:G1462 ARGS))
+           (RESULT (&REST ARGS)
+             (APPLY 'RESULT #:G1462 ARGS))
+           (BIND (&REST ARGS)
+             (APPLY 'BIND #:G1462 ARGS))
+           (ZERO (&REST ARGS)
+             (APPLY 'ZERO #:G1462 ARGS))
+           (PLUS (&REST ARGS)
+             (APPLY 'PLUS #:G1462 ARGS)))
+      (BIND (PLUS (RESULT 1) (ITEM))
+            (LAMBDA (A)
+              (BIND (GUARD #'NUMBERP A)
+                    (LAMBDA (_)
+                      (DECLARE (IGNORABLE _))
+                      (BIND (PLUS (ITEM) (ZERO))
+                            (LAMBDA (B) (PROGN (RESULT (CONS A B)))))))))))
+#+end_src
 In fact, this notation is not specific to parsers, but can be used
 with any monad (Jones, 1995c). The reader might notice the similarity
 to the list comprehension notation supported by many functional
@@ -955,8 +983,8 @@ result (x:xs)
 
 Note that the parser string xs fails if only a prefix of the given
 string xs is recognised in the input. For example, applying the parser
-string "hello" to the input "hello there" gives the successful result
-[("hello"," there")]. On the other hand, applying the same parser to
+*\-string "hello"\-* to the input *\-"hello there"\-* gives the successful result
+*[("hello"," there")]*. On the other hand, applying the same parser to
 "helicopter" fails with the result [], even though the prefix "hel" of
 the input can be recognised.
 
@@ -969,6 +997,7 @@ the input can be recognised.
   (assert (cl:null (funcall (string "hello") 
                             "helicopter")))
 #+end_src
+
 In list comprehension notation, we are not just restricted to generators that bind
 variables to values, but can also use Boolean-valued guards that restrict the values
 of the bound variables. For example, a function negs that selects all the negative
@@ -982,7 +1011,7 @@ negs xs = [x | x <- xs, x < 0]
 #+name: lisp <monad-zero-plus> guard
 #+begin_src lisp
   (defmethod guard ((<m> <monad-zero-plus>) 
-                      value predicate
+                      predicate value
                       &rest predicate-args)
       (if (apply predicate value predicate-args)
           (result <m> value)
@@ -992,7 +1021,7 @@ negs xs = [x | x <- xs, x < 0]
 #+begin_src lisp
 (defun negs (xs) 
   (mlet* <list> ((x xs))
-    (guard x #'< 0)))
+    (guard #'< x 0)))
 #+end_src
 
 In this case, the expression x < 0 is a guard that restricts the
@@ -1021,7 +1050,7 @@ sat p = [x | x <- item, p x]
 #+begin_src lisp
   (defun satisfies (predicate)
     (mlet* <parser> ((x (item)))
-      (guard x predicate)))  
+      (guard predicate x)))  
 #+end_src
 
 We conclude this section by noting that there is another notation that can be
@@ -1059,7 +1088,7 @@ typically offer a fixed set of combinators for describing grammars. In
 contrast, with the method of building parsers as presented in this
 article the set of combinators is completely extensible: parsers are
 ﬁrst-class values, and we have the full power of a functional language
-at our disposal to deﬁne special combinators for special applications.
+at our disposal to define special combinators for special applications.
 
 In this section we define combinators for a number of common patterns
 of repetition. These combinators are not specific to parsers, but can
@@ -1082,19 +1111,13 @@ word = [x:xs | x <- letter, xs <- word] ++ [""]
 
 #+begin_src lisp
   (defun word ()
-    (m) (plus <parser> 
-          (mlet* <parser> 
+   (mlet* <parser>
+    (plus (mlet* <parser> 
               ((x (letter))
                (xs (word)))
-            (result (cons x xs)))
-          (result <parser> nil)))
-      (defun word ()
-      (mlet* <parser> ()
-        (plus (mlet* <parser> 
-                  ((x (letter))
-                   (xs (word)))
-                (result (cons x xs)))
-              (result nil))))
+            (result (cons x xs)))           
+          (result nil))))
+      
 #+end_src
 
 We can easily imagine a number of other parsers that exhibit a similar
@@ -1169,7 +1192,7 @@ many1 :: Parser a -> Parser [a]
 many1 p = [x:xs | x <- p, xs <- many p]
 #+end_src
 
-#+name: lisp <parser> many1
+#+name: lisp <parser> function many1
 #+begin_src lisp
   (defun many1 (parser)
     (mlet* <parser>
@@ -1185,6 +1208,7 @@ for many (char ’a’), except that the final pair ("", "aaab") is no
 longer present. Note also that many1 p may fail, whereas many p always
 succeeds.
 
+#+name: test lisp many and many1
 #+begin_src lisp
   (assert (equal '(((#\a #\a #\a) . "b") 
                    ((#\a #\a) . "ab")
@@ -1208,88 +1232,212 @@ eval xs = foldl1 op [ord x - ord ’0’ | x <- xs]
 m ‘op‘ n = 10*m + n
 #+end_src
 
-
+#+name: lisp <parser> nat
 #+begin_src lisp
 
-(defun natural () 
+(defun nat () 
   (mlet* <parser>
    ((xs (many1 (digit))))
-  (result (read-from-string (coerce xs 'string)))))
+  (result (read-from-string (coerce xs 'cl:string)))))
 
 #+end_src
+
+#+name: test lisp <parser> nat
+#+begin_src lisp
+  (assert (equal '((124 . "") (12 . "4") (1 . "24")) 
+                 (funcall (nat) "124")))  
+#+end_src
+
 In turn, nat can be used to define a parser for integers:
 
+#+begin_src haskell
 int :: Parser Int
 int = [-n | _ <- char ’-’, n <- nat] ++ nat
+#+end_src
 
-A more sophisticated way to deﬁne int is as follows. First try and parse the negation
-character ’-’. If this is successful then return the negation function as the result
-of the parse; otherwise return the identity function. The ﬁnal step is then to parse
-a natural number, and use the function returned by attempting to parse the ’-’
-character to modify the resulting number:
+#+name: lisp <parser> first int
+#+begin_src lisp
+  (defun int ()
+   (mlet* <parser> ()
+     (plus (mlet* <parser>
+               ((_ (char #\-))
+                (n (nat)))
+             (result (- n)))
+           (nat))))  
+#+end_src
+
+#+name: test lisp parser int
+#+begin_src lisp 
+  (assert (and (equal (funcall (int) "12345")
+                      '((12345 . "") (1234 . "5") (123 . "45") 
+                        (12 . "345") (1 . "2345")))
+               (equal (funcall (int) "-12345")
+                      '((-12345 . "") (-1234 . "5") (-123 . "45") 
+                        (-12 . "345") (-1 . "2345")))
+               (cl:null (funcall (int) "#-12345"))))
+  
+#+end_src
+
+A more sophisticated way to define int is as follows. First try and
+parse the negation character ’-’. If this is successful then return
+the negation function as the result of the parse; otherwise return the
+identity function. The final step is then to parse a natural number,
+and use the function returned by attempting to parse the ’-’ character
+to modify the resulting number:
+
+#+begin_src lisp
 int :: Parser Int
 int = [f n | f <- op, n <- nat]
 where
 op = [negate | _ <- char ’-’] ++ [id]
-4.2 Repetition with separators
+#+end_src
+
+#+name: lisp <parser> second int
+#+begin_src lisp
+  (defun int ()
+    (mlet* <parser> 
+        ((op (plus (mlet* <parser> ((_ (char #\-)))
+                     (result #'-))
+                   (result #'identity)))           
+         (n (nat)))
+      (result (funcall op n))))
+#+end_src
+
+** Repetition with separators
+
 The many combinators parse sequences of items. Now we consider a slightly more
 general pattern of repetition, in which separators between the items are involved.
 Consider the problem of parsing a non-empty list of integers, such as [1,-42,17].
-Such a parser can be deﬁned in terms of the many combinator as follows:
-ints :: Parser [Int]
-ints = [n:ns | _ <, n <, ns <, _ <-
+Such a parser can be defined in terms of the many combinator as follows:
 
-char ’[’
-int
-many [x | _ <- char ’,’, x <- int]
-char ’]’]
+#+begin_src haskell
+ints :: Parser [Int]
+ints = [n:ns | _ <- char ’[’, 
+               n <- int , 
+               ns <- many [x | _ <- char ’,’, x <- int], 
+               _ <- char ’]’]
+#+end_src
+
+#+name: ints first lisp <parser> 
+#+begin_src lisp
+  (defun ints () 
+    (mlet* <parser> 
+        ((_ (char #\[))
+         (n (int))
+         (ns (many (mlet* <parser>
+                       ((_ (char #\,))
+                        (x (int)))
+                     (result x))))
+         (_ (char #\])))
+      (result (cons n ns))))    
+#+end_src
+
+#+name: ints test lisp <parser> 
+#+begin_src lisp
+  (assert (equal (funcall (ints) "[1,234,567]")
+                 '(((1 234 567) . ""))))
+#+end_src
 
 As was the case in the previous section for the word parser, we can imagine a
 number of other parsers with a similar structure to ints, so it is useful to abstract
-on the pattern of repetition and deﬁne a general purpose combinator, which we
-call sepby1. The combinator sepby1 is like many1 in that it recognises non-empty
-sequences of a given parser p, but diﬀerent in that the instances of p are separated
+on the pattern of repetition and define a general purpose combinator, which we
+call sepby1. The combinator *sepby1* is like *many1* in that it recognises non-empty
+sequences of a given parser p, but different in that the instances of p are separated
 by a parser sep whose result values are ignored:
-sepby1
-:: Parser a -> Parser b -> Parser [a]
+
+#+begin_src haskell
+sepby1:: Parser a -> Parser b -> Parser [a]
 p ‘sepby1‘ sep = [x:xs | x <- p
-, xs <- many [y | _ <- sep, y <- p]]
-Note that the fact that the results of the sep parser are ignored is reﬂected in the
-type of the sepby1 combinator: the sep parser gives results of type b, but this type
-does not occur in the type [a] of the results of the combinator.
-Now ints can be deﬁned in a more compact form:
+                       , xs <- many [y | _ <- sep
+                                       , y <- p]]
+#+end_src
 
-Monadic Parser Combinators
+#+name: sepby1 lisp <parser> 
+#+begin_src lisp 
+(defun sepby1 (parser sep)
+  (mlet* <parser>
+     ((x parser)
+      (xs (many (mlet* <parser> 
+                 ((_ sep) 
+                  (y parser))
+                 (result y)))))
+     (result (cons x xs))))
+#+end_src
 
-15
+Note that the fact that the results of the sep parser are ignored is
+reflected in the type of the sepby1 combinator: the sep parser gives
+results of type b, but this type does not occur in the type [a] of the
+results of the combinator.  Now ints can be defined in a more compact
+form:
 
-ints = [ns | _ <- char ’[’
-, ns <- int ‘sepby1‘ char ’,’
-, _ <- char ’]’]
+#+begin_src haskell
+ints = [ns | _ <- char ’[’ 
+           , ns <- int ‘sepby1‘ char ’,’ 
+           , _ <- char ’]’]
+#+end_src
+
+#+name: second ints lisp <parser> interface 
+#+begin_src lisp
+  (defun ints ()
+    (mlet* <parser> 
+        ((_ (char #\[))
+         (ns (sepby1 (int) (char #\,)))
+         (_ (char #\])))
+      (result ns)))
+  
+#+end_src
+
 In fact we can go a little further. The bracketing of parsers by other parsers whose
 results are ignored — in the case above, the bracketing parsers are char ’[’ and
 char ’]’ — is common enough to also merit its own combinator:
+
+#+begin_src haskell
 bracket :: Parser a -> Parser b -> Parser c -> Parser b
 bracket open p close = [x | _ <- open, x <- p, _ <- close]
-Now ints can be deﬁned just as
-ints = bracket (char ’[’)
-(int ‘sepby1‘ char ’,’)
-(char ’]’)
-Finally, while many1 was deﬁned in terms of many, the combinator sepby (for
-possibly-empty sequences) is naturally deﬁned in terms of sepby1:
+#+end_src
+
+#+name: bracket lisp <parser> 
+#+begin_src lisp 
+  (defun bracket (open-parser parser close-parser)
+    (mlet* <parser>
+        ((_ open-parser)
+         (x parser)
+         (_ close-parser))
+      (result x)))
+#+end_src
+
+Now ints can be defined just as
+
+#+begin_src haskell
+ints = bracket (char ’[’) (int ‘sepby1‘ char ’,’) (char ’]’ )
+#+end_src
+
+#+begin_src lisp  
+  (defun ints () 
+    (bracket (char #\[) (sepby1 (int) (char #\,)) (char #\])))  
+#+end_src
+
+
+Finally, while many1 was defined in terms of many, the combinator sepby (for
+possibly-empty sequences) is naturally defined in terms of sepby1:
 sepby
+
 :: Parser a -> Parser b -> Parser [a]
 p ‘sepby‘ sep = (p ‘sepby1‘ sep) ++ [[]]
-4.3 Repetition with meaningful separators
+
+** Repetition with meaningful separators
+
 The sepby combinators handle the case of parsing sequences of items separated by
 text that can be ignored. In this ﬁnal section on repetition, we address the more
 general case in which the separators themselves carry meaning. The combinators
-deﬁned in this section are due to Fokker (1995).
+defined in this section are due to Fokker (1995).
+
 Consider the problem of parsing simple arithmetic expressions such as 1+2-(3+4),
 built up from natural numbers using addition, subtraction, and parentheses. The
 two arithmetic operators are assumed to associate to the left (thus, for example,
 1-2-3 should be parsed as (1-2)-3), and have the same precedence. The standard
 BNF grammar for such expressions is written as follows:
+
 expr
 addop
 factor
@@ -1300,6 +1448,7 @@ factor
 
 expr addop factor | factor
 + | nat | ( expr )
+
 
 This grammar can be translated directly into a combinator parser:
 expr
@@ -1324,17 +1473,20 @@ In fact, rather than just returning some kind of parse tree, the expr parser abo
 actually evaluates arithmetic expressions to their integer value: the addop parser
 returns a function as its result value, which is used to combine the result values
 produced by parsing the arguments to the operator.
+
 Of course, however, there is a problem with the expr parser as deﬁned above.
 The fact that the operators associate to the left is taken account of by expr being
 left-recursive (the ﬁrst thing it does is make a recursive call to itself). Thus expr
 never makes any progress, and hence does not terminate.
+
 As is well-known, this kind of non-termination for parsers can be solved by replacing left-recursion by iteration. Looking at the expr grammar, we see that an
 expression is a sequence of factor s, separated by addops. Thus the parser for expressions can be re-deﬁned using many as follows:
-expr = [... | x
-<- factor
-, fys <- many [(f,y) | f <- addop, y <- factor]]
-This takes care of the non-termination, but it still remains to ﬁll in the “...” part
-of the new deﬁnition, which computes the value of an expression.
+
+expr = [... | x <- factor
+            , fys <- many [(f,y) | f <- addop, y <- factor]]
+This takes care of the non-termination, but it still remains to fill in the “...” part
+of the new definition, which computes the value of an expression.
+
 Suppose now that the input string is "1-2+3-4". Then after parsing using expr,
 the variable x will be 1 and fys will be the list [((-),2), ((+),3), ((-),4)].
 These can be reduced to a single value 1-2+3-4 = ((1-2)+3)-4 = -2 by folding:
@@ -1345,13 +1497,13 @@ expr = [foldl (\x (f,y) -> f x y) x fys
 | x
 <- factor
 , fys <- many [(f,y) | f <- addop, y <- factor]]
+
 Now, for example, applying expr to the input string "1+2-(3+4)" gives the result
 [(-4,""), (3,"-(3+4)", (1,"+2-(3+4)")], as expected.
 Playing the generalisation game once again, we can abstract on the pattern of
 repetition in expr and deﬁne a new combinator. The combinator, chainl1, parses
 non-empty sequences of items separated by operators that associate to the left:
-chainl1
-:: Parser a -> Parser (a -> a -> a) -> Parser a
+chainl1 :: Parser a -> Parser (a -> a -> a) -> Parser a
 p ‘chainl1‘ op = [foldl (\x (f,y) -> f x y) x fys
 | x
 <- p
@@ -1369,7 +1521,7 @@ factor = nat ++ bracket (char ’(’) expr (char ’)’)
 Most operator parsers will have a similar structure to addop above, so it is useful
 to abstract a combinator for building such parsers:
 
-Monadic Parser Combinators
+Monadic Parser Combinators
 
 17
 
@@ -4009,13 +4161,39 @@ Marktoberdorf Summer school on program design calculi. Springer–Verlag.
   <<lisp <parser> string>>
   <<test lisp <parser> string>>
 
-  
-
-  
-
   <<lisp <parser> many>>
-  <<lisp <parser> many1>>
+
+  <<lisp <parser> function many1>>
+
   <<lisp word <parser> many>>
+
   <<test lisp word>>
-  (break "~S" (funcall (many1 (char #\a)) "aaab"))
+
+  <<test lisp many and many1>>
+
+  <<lisp <parser> nat>>
+
+  <<test lisp <parser> nat>>
+
+  <<lisp <parser> first int>>
+
+  <<test lisp parser int>>
+
+  <<lisp <parser> second int>>
+
+  <<test lisp parser int>>
+
+  <<ints first lisp <parser> >>
+ 
+  <<ints test lisp <parser> >>
+
+  <<sepby1 lisp <parser> >>
+ 
+  <<second ints lisp <parser> interface>>
+
+  <<ints test lisp <parser> >>
+
+  << bracket lisp <parser> >>
+
+  << second ints lisp <parser> >>
 #+end_src

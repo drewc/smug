@@ -9,7 +9,7 @@
 (in-package :drewc.org/smug/test/monparsing)
 
 (defun result (value)
-  (lambda (input)
+  (lambda (input) 
     (list (cons value input))))
 
 (assert (equal '((1 . "asd"))
@@ -24,13 +24,19 @@
   (lambda (input)
     (etypecase input 
       (null nil)
-      (string 
-       (list (cons (aref input 0)
-                   (subseq input 1)))))))
+      (string
+       (unless (equal input "")
+         (list (cons (aref input 0)
+                     (subseq input 1))))))))
 
 (assert (equal '((#\a . "sd"))
                (funcall (item) "asd")))
 
+(assert (equal '((#\a . ""))
+               (funcall (item) "a")))
+
+(assert (null
+         (funcall (item) "")))
      
 (defpackage drewc.org/smug/test/monparsing%sequence
   (:use :cl)
@@ -153,12 +159,12 @@
 (defun lower ()
   (satisfies (lambda (x) 
                (and (char<= #\a x)
-                    (char>= x #\z)))))
+                    (char>= #\z x)))))
 
 (defun upper ()
   (satisfies (lambda (x) 
                (and (char<= #\A x)
-                    (char>= x #\Z)))))
+                    (char>= #\Z x)))))
 
 
 (assert (equal '((#\H . "ello"))
