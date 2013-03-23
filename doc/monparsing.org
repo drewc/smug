@@ -9,7 +9,7 @@ Department of Computer Science, University of Nottingham, 1996
 Abstract:
 
 In functional programming, a popular approach to building recursive
-descent parsers is to model parsers as functions, and to deﬁne
+descent parsers is to model parsers as functions, and to define
 higher-order functions (or combinators) that implement grammar
 constructions such as sequencing, choice, and repetition. Such parsers
 form an instance of a monad , an algebraic structure from mathematics
@@ -24,7 +24,7 @@ monads in programming.
 * Introduction
 
 In functional programming, a popular approach to building recursive
-descent parsers is to model parsers as functions, and to deﬁne
+descent parsers is to model parsers as functions, and to define
 higher-order functions (or combinators) that implement grammar
 constructions such as sequencing, choice, and repetition. The basic
 idea dates back to at least Burge’s book on recursive programming
@@ -49,17 +49,17 @@ work. Moreover, using monad comprehension notation makes parsers more
 compact and easier to read.
 
 Taking the monadic approach further, the monad of parsers can be expressed in
-a modular way in terms of two simpler monads. The immediate beneﬁt is that the
+a modular way in terms of two simpler monads. The immediate benefit is that the
 basic parser combinators no longer need to be defined explicitly. Rather, they arise
 automatically as a special case of lifting monad operations from a base monad m
 to a certain other monad parameterised over m. This also means that, if we change
 the nature of parsers by modifying the base monad (for example, limiting parsers
-to producing at most one result), then new combinators for the modiﬁed monad of
+to producing at most one result), then new combinators for the modified monad of
 parsers also arise automatically via the lifting construction.
 
 The purpose of this article is to provide a step-by-step tutorial on
 the monadic approach to building functional parsers, and to explain
-some of the beneﬁts that result from exploiting monads. Much of the
+some of the benefits that result from exploiting monads. Much of the
 material is already known. Our contributions are the organisation of
 the material into a tutorial article; the introduction of new
 combinators for handling lexical issues without a separate lexer; and
@@ -92,7 +92,7 @@ explicit the grammatical structure of the string:
 #+end_src
 
 In general, however, a parser might not consume all of its input string, so rather
-than the result of a parser being just a tree, we also return the unconsumed suﬃx
+than the result of a parser being just a tree, we also return the unconsumed suffix
 of the input string. Thus we modify our type of parsers as follows:
 
 #+begin_src haskell
@@ -509,7 +509,7 @@ p ‘plus‘ q = \inp -> (p inp ++ q inp)
 That is, both argument parsers p and q are applied to the same input string, and
 their result lists are concatenated to form a single result list. Note that it is not
 required that p and q accept disjoint sets of strings: if both parsers succeed on
-the input string then more than one result value will be returned, reﬂecting the
+the input string then more than one result value will be returned, reflecting the
 different ways that the input string can be parsed.
 
 As examples of using plus, some of our earlier parsers can now be combined to
@@ -788,13 +788,13 @@ Now since Parser is already a monad, it can be made into a monad with a zero
 and a plus using the following definitions:
 
 #+begin_src haskell
-instance Monad0Plus Parser where
--- zero :: Parser a
-zero
-= \inp -> []
--- (++) :: Parser a -> Parser a -> Parser a
-p ++ q
-= \inp -> (p inp ++ q inp)
+  instance Monad0Plus Parser where
+  -- zero :: Parser a
+  zero
+  = \inp -> []
+  -- (++) :: Parser a -> Parser a -> Parser a
+  p ++ q
+  = \inp -> (p inp ++ q inp)
 #+end_src
 
 #+name: lisp <parser> interface
@@ -804,27 +804,35 @@ p ++ q
     (:singleton)
     (:generic item (<parser>)))
   
+  (defgeneric item-input (<parser> input)
+    (:method ((<p> <parser>) (input cl:null))
+      input)
+    (:method ((<p> <parser>) (input cl:string))
+      (unless (string= input "")
+        (list 
+         (cons (aref input 0) 
+               (multiple-value-bind (array displaced-index-offset) 
+                   (array-displacement input) 
+                 (let ((string (or array input))
+                       (index (if array (1+ displaced-index-offset) 1)))
+                   (make-array (1- (length string))
+                               :displaced-to string
+                               :displaced-index-offset index
+                               :element-type (array-element-type string)))))))))
+  
   (defmethod item ((<p> <parser>))
     (lambda (input)
-      (etypecase input 
-        (cl:null nil)
-        (cl:string 
-         (unless (string= input "")
-           (list 
-            (cons 
-             (aref input 0)
-             (subseq input 1))))))))
+      (item-input <p> input)))
 #+end_src
 
 #+name: lisp <parser> zero/plus definition
 #+begin_src lisp
-(defmethod zero ((<p> <parser>))
-   (constantly NIL))
-
-(defmethod plus ((<p> <parser>) parser qarser)
-  (lambda (input) 
-    (append (funcall parser input)
-            (funcall qarser input))))
+  (defmethod zero ((<p> <parser>))
+     (constantly NIL))
+  
+  (defmethod plus ((<p> <parser>) parser qarser)
+    (lambda (input)
+      (append (funcall parser input) (funcall qarser input))))
 #+end_src
 
 ** Monad comprehension syntax
@@ -861,28 +869,29 @@ allowing them to be expressed in the following, more appealing form:
 
 #+name: lisp mlet*
 #+begin_src lisp 
-      (defmacro mlet* (monad bindings &body body)
-        (if monad     
-            (let ((m (gensym)))
-              `(let ((,m ,monad))
-                 (flet ,(loop :for (name . args) 
-                           :in (interface-options (symbol-value monad))
-                           :when (and (eq name :generic)
-                                      (not (eq (first args) 
-                                               'interface-options)))
-                           :collect `(,(first args) (&rest args)
-                                       (apply ',(first args) ,m args)))
-                   (mlet* nil ,bindings ,@body))))
-            (if bindings 
-                (destructuring-bind ((var form) &rest bindings)
-                    bindings
-                  `(bind ,form (lambda (,var) 
-                                 ,@(when (string= var "_")
-                                        `((declare (ignorable ,var))))
+    (defmacro mlet* (monad bindings &body body)
+      (let ((interface-form (if (listp monad) monad (list monad))))    
+        (destructuring-bind (monad-interface &rest args &key (with-interface t) &allow-other-keys)
+            interface-form
+          (if with-interface 
+              `(with-interface (,monad-interface ,@args) 
+                 (mlet* (,(first interface-form)
+                          :with-interface nil
+                          ,@(rest interface-form))
+                      ,bindings
+                     ,@body))
+              (if bindings 
+                  (destructuring-bind ((var form) &rest rest-of-bindings)
+                      bindings
+                    `(funcall 
+                      'bind ,monad-interface ,form 
+                      (lambda (,var) 
+                        ,@(when (string= var "_")
+                                `((declare (ignorable ,var))))
+                        (mlet* ,interface-form ,rest-of-bindings
+                          ,@body))))
+                  `(cl:progn ,@body))))))
     
-                                 (mlet* nil ,bindings
-                                        ,@body))))
-                `(progn ,@body))))  
 #+end_src
 
 #+name: lisp macroexpand-all mlet* 
@@ -914,6 +923,7 @@ allowing them to be expressed in the following, more appealing form:
                       (BIND (PLUS (ITEM) (ZERO))
                             (LAMBDA (B) (PROGN (RESULT (CONS A B)))))))))))
 #+end_src
+
 In fact, this notation is not specific to parsers, but can be used
 with any monad (Jones, 1995c). The reader might notice the similarity
 to the list comprehension notation supported by many functional
@@ -936,7 +946,7 @@ string "" = [""]
 string (x:xs) = [x:xs | _ <- char x, _ <- string xs]
 #+end_src
 
-#+name: lisp <parser> string
+#+name: lisp <parser> string 
 #+begin_src lisp
 (defun string (string)
    (if (string= string "")
@@ -1048,9 +1058,9 @@ sat p = [x | x <- item, p x]
 
 #+name: lisp <parser> satisfies
 #+begin_src lisp
-  (defun satisfies (predicate)
+  (defun satisfies (predicate &rest args)
     (mlet* <parser> ((x (item)))
-      (guard predicate x)))  
+      (apply #'guard predicate x args)))  
 #+end_src
 
 We conclude this section by noting that there is another notation that can be
@@ -1087,7 +1097,7 @@ Happy (Gill & Marlow, 1995) for producing parsers written in Haskell,
 typically offer a fixed set of combinators for describing grammars. In
 contrast, with the method of building parsers as presented in this
 article the set of combinators is completely extensible: parsers are
-ﬁrst-class values, and we have the full power of a functional language
+first-class values, and we have the full power of a functional language
 at our disposal to define special combinators for special applications.
 
 In this section we define combinators for a number of common patterns
@@ -1240,7 +1250,7 @@ m ‘op‘ n = 10*m + n
    ((xs (many1 (digit))))
   (result (read-from-string (coerce xs 'cl:string)))))
 
-#+end_src
+#+end_sr
 
 #+name: test lisp <parser> nat
 #+begin_src lisp
@@ -1412,6 +1422,7 @@ Now ints can be defined just as
 ints = bracket (char ’[’) (int ‘sepby1‘ char ’,’) (char ’]’ )
 #+end_src
 
+#+name: third ints lisp <parser>  
 #+begin_src lisp  
   (defun ints () 
     (bracket (char #\[) (sepby1 (int) (char #\,)) (char #\])))  
@@ -1420,70 +1431,102 @@ ints = bracket (char ’[’) (int ‘sepby1‘ char ’,’) (char ’]’ )
 
 Finally, while many1 was defined in terms of many, the combinator sepby (for
 possibly-empty sequences) is naturally defined in terms of sepby1:
-sepby
 
-:: Parser a -> Parser b -> Parser [a]
+
+#+begin_src haskell
+sepby :: Parser a -> Parser b -> Parser [a]
 p ‘sepby‘ sep = (p ‘sepby1‘ sep) ++ [[]]
+#+end_src
+
+#+name: sepby lisp <parser> 
+#+begin_src lisp
+(defun sepby (parser sep)
+  (mlet* <parser> ()
+    (plus (sepby1 parser sep) 
+          (result nil))))
+#+end_src
 
 ** Repetition with meaningful separators
 
-The sepby combinators handle the case of parsing sequences of items separated by
-text that can be ignored. In this ﬁnal section on repetition, we address the more
-general case in which the separators themselves carry meaning. The combinators
-defined in this section are due to Fokker (1995).
+The sepby combinators handle the case of parsing sequences of items
+separated by text that can be ignored. In this final section on
+repetition, we address the more general case in which the separators
+themselves carry meaning. The combinators defined in this section are
+due to Fokker (1995).
 
-Consider the problem of parsing simple arithmetic expressions such as 1+2-(3+4),
-built up from natural numbers using addition, subtraction, and parentheses. The
-two arithmetic operators are assumed to associate to the left (thus, for example,
-1-2-3 should be parsed as (1-2)-3), and have the same precedence. The standard
-BNF grammar for such expressions is written as follows:
+Consider the problem of parsing simple arithmetic expressions such as
+1+2-(3+4), built up from natural numbers using addition, subtraction,
+and parentheses. The two arithmetic operators are assumed to associate
+to the left (thus, for example, 1-2-3 should be parsed as (1-2)-3),
+and have the same precedence. The standard BNF grammar for such
+expressions is written as follows:
 
-expr
-addop
-factor
-
-::=
-::=
-::=
-
-expr addop factor | factor
-+ | nat | ( expr )
-
+#+begin_src 
+ expr  ::= expr addop factor | factor
+ addop ::= + | -
+ factor ::= + | nat | ( expr ) 
+#+end_src
 
 This grammar can be translated directly into a combinator parser:
-expr
-:: Parser Int
-addop :: Parser (Int -> Int -> Int)
-factor :: Parser Int
-expr
 
-= [f x y | x <- expr, f <- addop, y <- factor] ++ factor
+#+begin_src haskell
+  expr :: Parser Int
+  addop :: Parser (Int -> Int -> Int)
+  factor :: Parser Int
+  expr = [f x y | x <- expr, f <- addop, y <- factor] ++ factor
+  
+  addop = [(+) | _ <- char ’+’] ++ [(-) | _ <- char ’-’]
+  
+  factor = nat ++ bracket (char ’(’) expr (char ’)’)
+#+end_src
 
-addop
+#+begin_src lisp
+  (defun expr ()
+    (mlet* <parser> ()
+      (plus  (mlet* <parser>
+                 ((x (expr))
+                  (f (addop))
+                  (y (factor)))
+               (result (funcall f x y)))
+             (factor))))
+#+end_src
 
-= [(+) | _ <- char ’+’] ++ [(-) | _ <- char ’-’]
-
-factor = nat ++ bracket (char ’(’) expr (char ’)’)
-
-16
-
-Graham Hutton and Erik Meijer
+#+begin_src lisp      
+      (defun addop ()
+        (mlet* <parser> ()
+          (plus (mlet* <parser> ((_ (char #\+)))
+                  (result #'+))
+                (mlet* <parser> ((_ (char #\-)))
+                  (result #'-)))))
+  
+  
+  (defun factor ()
+    (mlet* <parser> () (plus (nat) (bracket (char #\() (expr) (char #\))))))
+              
+#+end_src
 
 In fact, rather than just returning some kind of parse tree, the expr parser above
 actually evaluates arithmetic expressions to their integer value: the addop parser
 returns a function as its result value, which is used to combine the result values
 produced by parsing the arguments to the operator.
 
-Of course, however, there is a problem with the expr parser as deﬁned above.
-The fact that the operators associate to the left is taken account of by expr being
-left-recursive (the ﬁrst thing it does is make a recursive call to itself). Thus expr
-never makes any progress, and hence does not terminate.
+Of course, however, there is a problem with the expr parser as defined
+above.  The fact that the operators associate to the left is taken
+account of by expr being left-recursive (the first thing it does is
+make a recursive call to itself). Thus expr never makes any progress,
+and hence does not terminate.
 
-As is well-known, this kind of non-termination for parsers can be solved by replacing left-recursion by iteration. Looking at the expr grammar, we see that an
-expression is a sequence of factor s, separated by addops. Thus the parser for expressions can be re-deﬁned using many as follows:
+As is well-known, this kind of non-termination for parsers can be
+solved by replacing left-recursion by iteration. Looking at the expr
+grammar, we see that an expression is a sequence of factor s,
+separated by addops. Thus the parser for expressions can be re-defined
+using many as follows:
 
+#+begin_src haskell
 expr = [... | x <- factor
             , fys <- many [(f,y) | f <- addop, y <- factor]]
+#+end_src
+
 This takes care of the non-termination, but it still remains to fill in the “...” part
 of the new definition, which computes the value of an expression.
 
@@ -1493,88 +1536,105 @@ These can be reduced to a single value 1-2+3-4 = ((1-2)+3)-4 = -2 by folding:
 the built-in function foldl is such that, for example, foldl g a [b,c,d,e] =
 ((a ‘g‘ b) ‘g‘ c) ‘g‘ d) ‘g‘ e. In the present case, we need to take g as the
 function \x (f,y) -> f x y, and a as the integer x:
-expr = [foldl (\x (f,y) -> f x y) x fys
-| x
-<- factor
-, fys <- many [(f,y) | f <- addop, y <- factor]]
+
+#+begin_src haskell
+expr = [foldl (\x (f,y) -> f x y) x fys | x <- factor
+                                        , fys <- many [(f,y) | f <- addop, y <- factor]]
+#+end_src
+
 
 Now, for example, applying expr to the input string "1+2-(3+4)" gives the result
 [(-4,""), (3,"-(3+4)", (1,"+2-(3+4)")], as expected.
 Playing the generalisation game once again, we can abstract on the pattern of
-repetition in expr and deﬁne a new combinator. The combinator, chainl1, parses
+repetition in expr and define a new combinator. The combinator, chainl1, parses
 non-empty sequences of items separated by operators that associate to the left:
+
+#+begin_src haskell
 chainl1 :: Parser a -> Parser (a -> a -> a) -> Parser a
 p ‘chainl1‘ op = [foldl (\x (f,y) -> f x y) x fys
-| x
-<- p
-, fys <- many [(f,y) | f <- op, y <- p]]
+                  | x <- p , fys <- many [(f,y) | f <- op, y <- p]]
+#+end_src
+
 Thus our parser for expressions can now be written as follows:
-expr
 
-= factor ‘chainl1‘ addop
+#+begin_src haskell
+expr = factor ‘chainl1‘ addop
 
-addop
-
-= [(+) | _ <- char ’+’] ++ [(-) | _ <- char ’-’]
-
+addop = [(+) | _ <- char ’+’] ++ [(-) | _ <- char ’-’]
 factor = nat ++ bracket (char ’(’) expr (char ’)’)
+#+end_src
+
 Most operator parsers will have a similar structure to addop above, so it is useful
 to abstract a combinator for building such parsers:
 
-Monadic Parser Combinators
-
-17
-
-ops
-:: [(Parser a, b)] -> Parser b
+#+begin_src haskell
+ops:: [(Parser a, b)] -> Parser b
 ops xs = foldr1 (++) [[op | _ <- p] | (p,op) <- xs]
+#+end_src
+
 The built-in function foldr1 is such that, for example, foldr1 g [a,b,c,d] = a
-‘g‘ (b ‘g‘ (c ‘g‘ d)). It is deﬁned for any non-empty list. In the above case
+‘g‘ (b ‘g‘ (c ‘g‘ d)). It is defined for any non-empty list. In the above case
 then, foldr1 places the choice operator (++) between each parser in the list. Using
-ops, our addop parser can now be deﬁned by
+ops, our addop parser can now be defined by
+
+#+begin_src haskell
 addop = ops [(char ’+’, (+)), (char ’-’, (-))]
-A possible ineﬃciency in the deﬁnition of the chainl1 combinator is the construction of the intermediate list fys. This can be avoided by giving a direct recursive deﬁnition of chainl1 that does not make use of foldl and many, using an
-accumulating parameter to construct the ﬁnal result:
-chainl1
-:: Parser a -> Parser (a -> a -> a) -> Parser a
+#+end_src
+
+A possible inefficiency in the definition of the chainl1 combinator is the construction of the intermediate list fys. This can be avoided by giving a direct recursive definition of chainl1 that does not make use of foldl and many, using an
+accumulating parameter to construct the final result:
+
+#+begin_src haskell
+chainl1 :: Parser a -> Parser (a -> a -> a) -> Parser a
 p ‘chainl1‘ op = p ‘bind‘ rest
 where
 rest x = (op ‘bind‘ \f ->
 p ‘bind‘ \y ->
 rest (f x y)) ++ [x]
-This deﬁnition has a natural operational reading. The parser p ‘chainl1‘ op ﬁrst
+
+#+end_src
+This definition has a natural operational reading. The parser p ‘chainl1‘ op first
 parses a single p, whose result value becomes the initial accumulator for the rest
 function. Then it attempts to parse an operator and a single p. If successful, the
 accumulator and the result from p are combined using the function f returned from
 parsing the operator, and the resulting value becomes the new accumulator when
 parsing the remainder of the sequence (using a recursive call to rest). Otherwise,
-the sequence is ﬁnished, and the accumulator is returned.
-As another interesting application of chainl1, we can redeﬁne our earlier parser
+the sequence is finished, and the accumulator is returned.
+
+As another interesting application of chainl1, we can redefine our earlier parser
 nat for natural numbers such that it does not construct an intermediate list of
 digits. In this case, the op parser does not do any parsing, but returns the function
 that combines a natural and a digit:
+
+#+begin_src haskell
 nat :: Parser Int
 nat = [ord x - ord ’0’ | x <- digit] ‘chainl1‘ [op]
 where
 m ‘op‘ n = 10*m + n
-Naturally, we can also deﬁne a combinator chainr1 that parses non-empty sequences of items separated by operators that associate to the right, rather than to
-the left. For simplicity, we only give the direct recursive deﬁnition:
-chainr1
-:: Parser a -> Parser (a -> a -> a) -> Parser a
+#+end_src
+
+Naturally, we can also define a combinator chainr1 that parses non-empty sequences of items separated by operators that associate to the right, rather than to
+the left. For simplicity, we only give the direct recursive definition:
+
+#+begin_src haskell
+chainr1 :: Parser a -> Parser (a -> a -> a) -> Parser a
 p ‘chainr1‘ op =
 p ‘bind‘ \x ->
 [f x y | f <- op, y <- p ‘chainr1‘ op] ++ [x]
-That is, p ‘chainr1‘ op ﬁrst parses a single p. Then it attempts to parse an operator and the rest of the sequence (using a recursive call to chainr1). If successful,
+#+end_src
 
-18
+That is, p ‘chainr1‘ op first parses a single p. Then it attempts to
+parse an operator and the rest of the sequence (using a recursive call
+to chainr1). If successful,
 
-Graham Hutton and Erik Meijer
+the pair of results from the first p and the rest of the sequence are combined using the function f returned from parsing the operator. Otherwise, the sequence is
+finished, and the result from p is returned.
 
-the pair of results from the ﬁrst p and the rest of the sequence are combined using the function f returned from parsing the operator. Otherwise, the sequence is
-ﬁnished, and the result from p is returned.
 As an example of using chainr1, we extend our parser for arithmetic expressions
 to handle exponentiation; this operator has higher precedence than the previous
 two operators, and associates to the right:
+
+#+begin_src haskell
 expr
 
 = term
@@ -1594,38 +1654,51 @@ expop
 
 = ops [(char ’^’, (^))]
 
-For completeness, we also deﬁne combinators chainl and chainr that have the
+#+end_src
+
+For completeness, we also define combinators chainl and chainr that have the
 same behaviour as chainl1 and chainr1, except that they can also consume no
 input, in which case a given value v is returned as the result:
+
+#+begin_src haskell
 chainl :: Parser a -> Parser (a -> a -> a) -> a -> Parser a
 chainl p op v = (p ‘chainl1‘ op) ++ [v]
 chainr :: Parser a -> Parser (a -> a -> a) -> a -> Parser a
 chainr p op v = (p ‘chainr1‘ op) ++ [v]
-In summary then, chainl and chainr provide a simple way to build parsers for
-expression-like grammars. Using these combinators avoids the need for transformations to remove left-recursion in the grammar, that would otherwise result in
-non-termination of the parser. They also avoid the need for left-factorisation of the
-grammar, that would otherwise result in unnecessary backtracking; we will return
-to this point in the next section.
+#+end_src
 
-5 Eﬃciency of parsers
-Using combinators is a simple and ﬂexible method of building parsers. However,
-the power of the combinators — in particular, their ability to backtrack and return
-multiple results — can lead to parsers with unexpected space and time performance
-if one does not take care. In this section we outline some simple techniques that can
-be used to improve the eﬃciency of parsers. Readers interested in further techniques
-are referred to R¨jemo’s thesis (1995), which contains a chapter on the use of heap
-o
-proﬁling tools in the optimisation of parser combinators.
+In summary then, chainl and chainr provide a simple way to build
+parsers for expression-like grammars. Using these combinators avoids
+the need for transformations to remove left-recursion in the grammar,
+that would otherwise result in non-termination of the parser. They
+also avoid the need for left-factorisation of the grammar, that would
+otherwise result in unnecessary backtracking; we will return to this
+point in the next section.
 
-Monadic Parser Combinators
+* Efficiency of parsers
 
-19
+Using combinators is a simple and flexible method of building
+parsers. However, the power of the combinators — in particular, their
+ability to backtrack and return multiple results — can lead to parsers
+with unexpected space and time performance if one does not take
+care. In this section we outline some simple techniques that can be
+used to improve the efficiency of parsers. Readers interested in further
+techniques are referred to R¨jemo’s thesis (1995), which contains a
+chapter on the use of heap o profiling tools in the optimisation of
+parser combinators.
 
-5.1 Left factoring
-Consider the simple problem of parsing and evaluating two natural numbers separated by the addition symbol ‘+’, or by the subtraction symbol ‘-’. This speciﬁcation
-can be translated directly into the following parser:
-eval :: Parser
+** Left factoring
+
+Consider the simple problem of parsing and evaluating two natural
+numbers separated by the addition symbol ‘+’, or by the subtraction
+symbol ‘-’. This specification can be translated directly into the
+following parser: 
+
+#+begin_src haskell
+eval :: Parser 
+
 eval = add ++
+
 where
 add
 sub
@@ -1635,203 +1708,283 @@ sub
 = [x+y | x <- nat, _ <- char ’+’, y <- nat]
 = [x-y | x <- nat, _ <- char ’-’, y <- nat]
 
-This parser gives the correct results, but is ineﬃcient. For example, when parsing
-the string "123-456" the number 123 will ﬁrst be parsed by the add parser, that
+#+end_src
+
+This parser gives the correct results, but is inefficient. For example, when parsing
+the string "123-456" the number 123 will first be parsed by the add parser, that
 will then fail because there is no ‘+’ symbol following the number. The correct parse
 will only be found by backtracking in the input string, and parsing the number 123
 again, this time from within the sub parser.
 Of course, the way to avoid the possibility of backtracking and repeated parsing
 is to left factorise the eval parser. That is, the initial use of nat in the component
 parsers add and sub should be factorised out:
+
+#+begin_src haskell
 eval = [v | x <- nat, v <- add x ++ sub x]
 where
 add x = [x+y | _ <- char ’+’, y <- nat]
 sub x = [x+y | _ <- char ’-’, y <- nat]
-This new version of eval gives the same results as the original version, but requires
-no backtracking. Using the new eval, the string "123-456" can now be parsed in
-linear time. In fact we can go a little further, and right factorise the remaining
-use of nat in both add and sub. This does not improve the eﬃciency of eval, but
-arguably gives a cleaner parser:
+#+end_src
+
+This new version of eval gives the same results as the original
+version, but requires no backtracking. Using the new eval, the string
+"123-456" can now be parsed in linear time. In fact we can go a little
+further, and right factorise the remaining use of nat in both add and
+sub. This does not improve the efficiency of eval, but arguably gives a
+cleaner parser:
+
+#+begin_src haskell
 eval = [f x y | x <- nat
 , f <- ops [(char ’+’, (+)), (char ’-’, (-))]
 , y <- nat]
+#+end_src
+
 In practice, most cases where left factorisation of a parser is necessary to improve
-eﬃciency will concern parsers for some kind of expression. In such cases, manually
+efficiency will concern parsers for some kind of expression. In such cases, manually
 factorising the parser will not be required, since expression-like parsers can be built
 using the chain combinators from the previous section, which already encapsulate
 the necessary left factorisation.
 The motto of this section is the following: backtracking is a powerful tool, but it
 should not be used as a substitute for care in designing parsers.
-5.2 Improving laziness
-Recall the deﬁnition of the repetition combinator many:
+
+** Improving laziness
+
+Recall the definition of the repetition combinator many:
+#+begin_src haskell
 many :: Parser a -> Parser [a]
 many p = [x:xs | x <- p, xs <- many p] ++ [[]]
-
-20
-
-Graham Hutton and Erik Meijer
+#+end_src
 
 For example, applying many (char ’a’) to the input "aaab" gives the result
-[("aaa","b"), ("aa","ab"), ("a","aab"),("","aaab")]. Since Gofer is lazy,
-we would expect the a’s in the ﬁrst result "aaa" to become available one at a time,
-as they are consumed from the input. This is not in fact what happens. In practice
-no part of the result "aaa" will be produced until all the a’s have been consumed.
+[("aaa","b"), ("aa","ab"), ("a","aab"),("","aaab")]. 
+
+Since Gofer is lazy, we would expect the a’s in the first result "aaa"
+to become available one at a time, as they are consumed from the
+input. This is not in fact what happens. In practice no part of the
+result "aaa" will be produced until all the a’s have been consumed.
 In other words, many is not as lazy as we would expect.
-But does this really matter? Yes, because it is common in functional programming
-to rely on laziness to avoid the creation of large intermediate structures (Hughes,
-1989). As noted by Wadler (1985; 1992b), what is needed to solve the problem with
-many is a means to make explicit that the parser many p always succeeds. (Even
-if p itself always fails, many p will still succeed, with the empty list as the result
-value.) This is the purpose of the force combinator:
+
+But does this really matter? Yes, because it is common in functional
+programming to rely on laziness to avoid the creation of large
+intermediate structures (Hughes, 1989). As noted by Wadler (1985;
+1992b), what is needed to solve the problem with many is a means to
+make explicit that the parser many p always succeeds. (Even if p
+itself always fails, many p will still succeed, with the empty list as
+the result value.) This is the purpose of the force combinator:
+
+#+begin_src haskell
 force :: Parser a -> Parser a
 force p = \inp -> let x = p inp in
 (fst (head x), snd (head x)) : tail x
-Given a parser p that always succeeds, the parser force p has the same behaviour
-as p, except that before any parsing of the input string is attempted the result of
-the parser is immediately forced to take on the form (⊥,⊥):⊥, where ⊥ represents
-a presently undeﬁned value.
-Using force, the many combinator can be re-deﬁned as follows:
+#+end_src
+
+Given a parser p that always succeeds, the parser force p has the same
+behaviour as p, except that before any parsing of the input string is
+attempted the result of the parser is immediately forced to take on
+the form (⊥,⊥):⊥, where ⊥ represents a presently undefined value.
+
+Using force, the many combinator can be re-defined as follows:
+
+#+begin_src haskell
 many :: Parser a -> Parser [a]
 many p = force ([x:xs | x <- p, xs <- many p] ++ [[]])
-The use of force ensures that many p and all of its recursive calls return at least
-one result. The new deﬁnition of many now has the expected behaviour under lazy
-evaluation. For example, applying many (char ’a’) to the partially-deﬁned string
-’a’:⊥ gives the partially-deﬁned result (’a’:⊥,⊥):⊥. In contrast, with the old
-version of many, the result for this example is the completely undeﬁned value ⊥.
-Some readers might wonder why force is deﬁned using the following selection
+#+end_src
+
+The use of force ensures that many p and all of its recursive calls
+return at least one result. The new definition of many now has the
+expected behaviour under lazy evaluation. For example, applying many
+(char ’a’) to the partially-defined string ’a’:⊥ gives the
+partially-defined result (’a’:⊥,⊥):⊥. In contrast, with the old version
+of many, the result for this example is the completely undefined value
+⊥.
+
+Some readers might wonder why force is defined using the following selection
 functions, rather than by pattern matching?
+
+#+begin_src haskell
 fst :: (a,b) -> a
 snd :: (a,b) -> b
 
 head :: [a] -> a
 tail :: [a] -> [a]
+#+end_src
 
-The answer is that, depending on the semantics of patterns in the particular implementation language, a deﬁnition of force using patterns might not have the
-expected behaviour under lazy evaluation.
-5.3 Limiting the number of results
-Consider the simple problem of parsing a natural number, or if no such number is
-present just returning the number 0 as the default result. A ﬁrst approximation to
-such a parser might be as follows:
+The answer is that, depending on the semantics of patterns in the
+particular implementation language, a definition of force using
+patterns might not have the expected behaviour under lazy evaluation.
+
+** Limiting the number of results
+
+Consider the simple problem of parsing a natural number, or if no such
+number is present just returning the number 0 as the default result. A
+first approximation to such a parser might be as follows:
+
+#+begin_src haskell
 number :: Parser Int
 number = nat ++ [0]
+#+end_src
 
-Monadic Parser Combinators
+However, this does not quite have the required behaviour. For example,
+applying number to the input "hello" gives the correct result
+[(0,"hello")]. 
 
-21
+On the other hand, applying number to "123" gives the
+result [(123,""), (0,"123")], whereas we only really want the single
+result [(123,"")].
 
-However, this does not quite have the required behaviour. For example, applying
-number to the input "hello" gives the correct result [(0,"hello")]. On the other
-hand, applying number to "123" gives the result [(123,""), (0,"123")], whereas
-we only really want the single result [(123,"")].
 One solution to the above problem is to make use of deterministic parser combinators (see section 7.5) — all parsers built using such combinators are restricted
 by construction to producing at most one result. A more general solution, however,
-is to retain the ﬂexibility of the non-deterministic combinators, but to provide a
-means to make explicit that we are only interested in the ﬁrst result produced by
+is to retain the flexibility of the non-deterministic combinators, but to provide a
+means to make explicit that we are only interested in the first result produced by
 certain parsers, such as number. This is the purpose of the first combinator:
+
+#+begin_src haskell
 first :: Parser a -> Parser a
 first p = \inp -> case p inp of
-[]
--> []
-(x:xs) -> [x]
+                    [] -> []
+                    (x:xs) -> [x]
+#+end_src
+
+#+name: first <parser> lisp 
+#+begin_src lisp
+(defun first (parser)
+  (lambda (input)
+    (let ((results (funcall parser input)))
+       (when results (list (cl:first results))))))
+#+end_src
+
 Given a parser p, the parser first p has the same behaviour as p, except that
-only the ﬁrst result (if any) is returned. Using first we can deﬁne a deterministic
+only the first result (if any) is returned. Using first we can define a deterministic
 version (+++) of the standard choice combinator (++) for parsers:
+
+#+begin_src haskell
 (+++) :: Parser a -> Parser a -> Parser a
 p +++ q = first (p ++ q)
+#+end_src
+
+#+name: maybe <parser> lisp 
+#+begin_src lisp
+(defun maybe (parser1 parser2)
+  (first (plus <parser> parser1 parser2)))
+#+end_src
+
 Replacing (++) by (+++) in number gives the desired behaviour.
 As well as being used to ensure the correct behaviour of parsers, using (+++) can
-also improve their eﬃciency. As an example, consider a parser that accepts either
+also improve their efficiency. As an example, consider a parser that accepts either
 of the strings "yellow" or "orange":
+
+#+begin_src haskell
 colour :: Parser String
 colour = p1 ++ p2
 where
 p1 = string "yellow"
 p2 = string "orange"
+#+end_src
+
 Recall now the behaviour of the choice combinator (++): it takes a string, applies
 both argument parsers to this string, and concatenates the resulting lists. Thus in
 the colour example, if p1 is successfully applied then p2 will still be applied to the
-same string, even though it is guaranteed to fail. This ineﬃciency can be avoided
+same string, even though it is guaranteed to fail. This inefficiency can be avoided
 using (+++), which ensures that if p1 succeeds then p2 is never applied:
+
+#+begin_src haskell
 colour = p1 +++ p2
 where
 p1 = string "yellow"
 p2 = string "orange"
-More generally, if we know that a parser of the form p ++ q is deterministic (only
-ever returns at most one result value), then p +++ q has the same behaviour, but is
-more eﬃcient: if p succeeds then q is never applied. In the remainder of this article
-it will mostly be the (+++) choice combinator that is used. For reasons of eﬃciency,
+#+end_src
 
-22
+More generally, if we know that a parser of the form p ++ q is
+deterministic (only ever returns at most one result value), then p +++
+q has the same behaviour, but is more efficient: if p succeeds then q
+is never applied. In the remainder of this article it will mostly be
+the (+++) choice combinator that is used. For reasons of efficiency,
+in the combinator libraries that accompany this article, the
+repetition combinators from the previous section are defined using
+(+++) rather than (++).
 
-Graham Hutton and Erik Meijer
-
-in the combinator libraries that accompany this article, the repetition combinators
-from the previous section are deﬁned using (+++) rather than (++).
-We conclude this section by asking why first is deﬁned by pattern matching,
-rather than by using the selection function take :: Int -> [a] -> [a] (where,
+We conclude this section by asking why first is defined by pattern matching,
+rather than by using the selection function 
+*take :: Int -> [a] -> [a]* (where,
 for example, take 3 "parsing" = "par"):
+
 first p = \inp -> take 1 (p inp)
+
 The answer concerns the behaviour under lazy evaluation. To see the problem, let
-us unfold the use of take in the above deﬁnition:
+us unfold the use of take in the above definition:
+
 first p = \inp -> case p inp of
 []
 -> []
 (x:xs) -> x : take 0 xs
+
 When the sub-expression take 0 xs is evaluated, it will yield []. However, under
 lazy evaluation this computation will be suspended until its value is required. The
 eﬀect is that the list xs may be retained in memory for some time, when in fact
 it can safely be discarded immediately. This is an example of a space leak . The
-deﬁnition of first using pattern matching does not suﬀer from this problem.
-6 Handling lexical issues
+definition of first using pattern matching does not suﬀer from this problem.
+
+* Handling lexical issues
+
 Traditionally, a string to be parsed is not supplied directly to a parser, but is
-ﬁrst passed through a lexical analysis phase (or lexer) that breaks the string into
+first passed through a lexical analysis phase (or lexer) that breaks the string into
 a sequence of tokens (Aho et al., 1986). Lexical analysis is a convenient place to
 remove white-space (spaces, newlines, and tabs) and comments from the input
-string, and to distinguish between identiﬁers and keywords.
+string, and to distinguish between identifiers and keywords.
+
 Since lexers are just simple parsers, they can be built using parser combinators,
 as discussed by Hutton (1992). However, as we shall see in this section, the need
 for a separate lexer can often be avoided (even for substantial grammars such as
 that for Gofer), with lexical issues being handled within the main parser by using
 some special purpose combinators.
-6.1 White-space, comments, and keywords
-We begin by deﬁning a parser that consumes white-space from the beginning of a
+
+** White-space, comments, and keywords
+
+We begin by defining a parser that consumes white-space from the beginning of a
 string, with a dummy value () returned as result:
+
+#+begin_src haskell
 spaces :: Parser ()
 spaces = [() | _ <- many1 (sat isSpace)]
 where
 isSpace x =
 (x == ’ ’) || (x == ’\n’) || (x == ’\t’)
+#+end_src
+
 Similarly, a single-line Gofer comment can be consumed as follows:
+
 comment :: Parser ()
 comment = [() | _ <- string "--"
 , _ <- many (sat (\x -> x /= ’\n’))]
 
-Monadic Parser Combinators
-
-23
-
-We leave it as an exercise for the reader to deﬁne a parser for consuming multi-line
+We leave it as an exercise for the reader to define a parser for consuming multi-line
 Gofer comments {- ... -}, which can be nested.
+
 After consuming white-space, there may still be a comment left to consume from
 the input string. Dually, after a comment there may still be white-space. Thus we
-are motivated to deﬁned a special parser that repeatedly consumes white-space and
+are motivated to defined a special parser that repeatedly consumes white-space and
 comments until no more remain:
+
 junk :: Parser ()
 junk = [() | _ <- many (spaces +++ comment)]
+
 Note that while spaces and comment can fail, the junk parser always succeeds. We
-deﬁne two combinators in terms of junk: parse removes junk before applying a
+define two combinators in terms of junk: parse removes junk before applying a
 given parser, and token removes junk after applying a parser:
+
 parse :: Parser a -> Parser a
 parse p = [v | _ <- junk, v <- p]
 token :: Parser a -> Parser a
 token p = [v | v <- p, _ <- junk]
-With the aid of these two combinators, parsers can be modiﬁed to ignore whitespace and comments. Firstly, parse is applied once to the parser as a whole, ensuring that input to the parser begins at a signiﬁcant character. And secondly, token
+
+With the aid of these two combinators, parsers can be modified to ignore whitespace and comments. Firstly, parse is applied once to the parser as a whole, ensuring that input to the parser begins at a significant character. And secondly, token
 is applied once to all sub-parsers that consume complete tokens, thus ensuring that
-the input always remains at a signiﬁcant character.
+the input always remains at a significant character.
+
 Examples of parsers for complete tokens are nat and int (for natural numbers
 and integers), parsers of the form string xs (for symbols and keywords), and
-ident (for identiﬁers). It is useful to deﬁne special versions of these parsers — and
-more generally, special versions of any user-deﬁned parsers for complete tokens —
+ident (for identifiers). It is useful to define special versions of these parsers — and
+more generally, special versions of any user-defined parsers for complete tokens —
 that encapsulate the necessary application of token:
 natural
 natural
@@ -1854,10 +2007,11 @@ symbol xs
 identifier
 :: [String] -> Parser String
 identifier ks = token [x | x <- ident, not (elem x ks)]
+
 Note that identifier takes a list of keywords as an argument, where a keyword
-is a string that is not permitted as an identiﬁer. For example, in Gofer the strings
+is a string that is not permitted as an identifier. For example, in Gofer the strings
 “data” and “where” (among others) are keywords. Without the keyword check,
-parsers deﬁned in terms of identifier could produce unexpected results, or involve
+parsers defined in terms of identifier could produce unexpected results, or involve
 unnecessary backtracking to construct the correct parse of the input string.
 
 24
@@ -1865,8 +2019,8 @@ unnecessary backtracking to construct the correct parse of the input string.
 Graham Hutton and Erik Meijer
 6.2 A parser for λ-expressions
 
-To illustrate the use of the new combinators given above, let us deﬁne a parser for
-simple λ-expressions extended with a “let” construct for local deﬁnitions. Parsed
+To illustrate the use of the new combinators given above, let us define a parser for
+simple λ-expressions extended with a “let” construct for local definitions. Parsed
 expressions will be represented in Gofer as follows:
 data Expr =
 |
@@ -1890,7 +2044,7 @@ lambda abstraction
 local definition
 variable
 
-Now a parser expr :: Parser Expr can be deﬁned by:
+Now a parser expr :: Parser Expr can be defined by:
 expr
 
 = atom ‘chainl1‘ [App]
@@ -1952,37 +2106,42 @@ symbol "in"
 expr]
 
 variable = identifier ["let","in"]
+
 Note how the expr parser handles white-space and comments by using the symbol
 parser in place of string and char. Similarly, the keywords “let” and “in” are
-handled by using identifier to deﬁne the parser for variables. Finally, note how
+handled by using identifier to define the parser for variables. Finally, note how
 applications (f e1 e2 ... en) are parsed in the form (((f e1) e2) ... ) by
 using the chainl1 combinator.
 
 7 Factorising the parser monad
+
 Up to this point in the article, combinator parsers have been our only example of
-the notion of a monad. In this section we deﬁne a number of other monads related
+the notion of a monad. In this section we define a number of other monads related
 to the parser monad, leading up to a modular reformulation of the parser monad
-in terms of two simpler monads (Jones, 1995a). The immediate beneﬁt is that, as
+in terms of two simpler monads (Jones, 1995a). The immediate benefit is that, as
 
 Monadic Parser Combinators
 
 25
 
-we shall see, the basic parser combinators no longer need to be deﬁned explicitly.
+we shall see, the basic parser combinators no longer need to be defined explicitly.
 Rather, they arise automatically as a special case of lifting monad operations from
 a base monad m to a certain other monad parameterised over m. This also means
 that, if we change the nature of parsers by modifying the base monad (for example,
-limiting parsers to producing at most one result), new combinators for the modiﬁed
-monad of parsers are also deﬁned automatically.
+limiting parsers to producing at most one result), new combinators for the modified
+monad of parsers are also defined automatically.
+
 7.1 The exception monad
-Before starting to deﬁne other monads, it is useful to ﬁrst focus brieﬂy on the
+
+Before starting to define other monads, it is useful to first focus briefly on the
 intuition behind the use of monads in functional programming (Wadler, 1992a).
 The basic idea behind monads is to distinguish the values that a computation
-can produce from the computation itself. More speciﬁcally, given a monad m and
+can produce from the computation itself. More specifically, given a monad m and
 a type a, we can think of m a as the type of computations that yield results of
 type a, with the nature of the computation captured by the type constructor m.
 The combinators result and bind (with zero and (++) if appropriate) provide a
 means to structure the building of such computations:
+
 result
 bind
 zero
@@ -2005,28 +2164,29 @@ a -> m a -> m a
 
 From a computational point of view, result converts values into computations
 that yield those values; bind chains two computations together in sequence, with
-results of the ﬁrst computation being made available for use in the second; zero is
-the trivial computation that does nothing; and ﬁnally, (++) is some kind of choice
+results of the first computation being made available for use in the second; zero is
+the trivial computation that does nothing; and finally, (++) is some kind of choice
 operation for computations.
+
 Consider, for example, the type constructor Maybe:
+
 data Maybe a = Just a | Nothing
+
 We can think of a value of type Maybe a as a computation that either succeeds with
 a value of type a, or fails, producing no value. Thus, the type constructor Maybe
 captures computations that have the possibility to fail.
-Deﬁning the monad combinators for a given type constructor is usually just a
-matter of making the “obvious deﬁnitions” suggested by the types of the combinators. For example, the type constructor Maybe can be made into a monad with a
-zero and plus using the following deﬁnitions:
-instance Monad Maybe where
--- result
-:: a -> Maybe a
-result x
-= Just x
--- bind
-:: Maybe a -> (a -> Maybe b) -> Maybe b
+
+Defining the monad combinators for a given type constructor is usually
+just a matter of making the “obvious definitions” suggested by the
+types of the combinators. For example, the type constructor Maybe can
+be made into a monad with a zero and plus using the following
+definitions: 
+instance Monad Maybe where -- result :: a -> Maybe a
+result x = Just x
+-- bind :: Maybe a -> (a -> Maybe b) -> Maybe b
 (Just x) ‘bind‘ f = f x
 Nothing ‘bind‘ f = Nothing
 
-26
 
 Graham Hutton and Erik Meijer
 
@@ -2044,20 +2204,25 @@ Nothing ++ y
 = y
 
 That is, result converts a value into a computation that succeeds with this value;
-bind is a sequencing operator, with a successful result from the ﬁrst computation
+bind is a sequencing operator, with a successful result from the first computation
 being available for use in the second computation; zero is the computation that
-fails; and ﬁnally, (++) is a (deterministic) choice operator that returns the ﬁrst
+fails; and finally, (++) is a (deterministic) choice operator that returns the first
 computation if it succeeds, and the second otherwise.
+
 Since failure can be viewed as a simple kind of exception, Maybe is sometimes
 called the exception monad in the literature (Spivey, 1990).
+
 7.2 The non-determinism monad
+
 A natural generalisation of Maybe is the list type constructor []. While a value of
 type Maybe a can be thought of as a computation that either succeeds with a single
 result of type a or fails, a value of type [a] can be thought of as a computation
 that has the possibility to succeed with any number of results of type a, including
 zero (which represents failure). Thus the list type constructor [] can be used to
 capture non-deterministic computations.
+
 Now [] can be made into a monad with a zero and plus:
+
 instance Monad [] where
 -- result
 :: a -> [a]
@@ -2083,7 +2248,7 @@ zero
 = x : (xs ++ ys)
 
 That is, result converts a value into a computation that succeeds with this single
-value; bind is a sequencing operator for non-deterministic computations; zero always fails; and ﬁnally, (++) is a (non-deterministic) choice operator that appends
+value; bind is a sequencing operator for non-deterministic computations; zero always fails; and finally, (++) is a (non-deterministic) choice operator that appends
 the results of the two argument computations.
 
 Monadic Parser Combinators
@@ -2091,13 +2256,16 @@ the results of the two argument computations.
 27
 
 7.3 The state-transformer monad
+
 Consider the (binary) type constructor State:
 type State s a = s -> (a,s)
+
 Values of type State s a can be interpreted as follows: they are computations that
 take an initial state of type s, and yield a value of type a together with a new state
 of type s. Thus, the type constructor State s obtained by applying State to a
 single type s captures computations that involve state of type s. We will refer to
 values of type State s a as stateful computations.
+
 Now State s can be made into a monad:
 instance Monad (State s) where
 -- result :: a -> State s a
@@ -2106,20 +2274,24 @@ result v
 -- bind
 :: State s a -> (a -> State s b) -> State s b
 st ‘bind‘ f = \s -> let (v,s’) = st s in f v s’
+
 That is, result converts a value into a stateful computation that returns that value
 without modifying the internal state, and bind composes two stateful computations
-in sequence, with the result value from the ﬁrst being supplied as input to the
+in sequence, with the result value from the first being supplied as input to the
 second. Thinking pictorially in terms of boxes and wires is a useful aid to becoming
 familiar with these two operations (Jones & Launchbury, 1994).
+
 The state-transformer monad State s does not have a zero and a plus. However,
 as we shall see in the next section, the parameterised state-transformer monad over
 a given based monad m does have a zero and a plus, provided that m does.
+
 To allow us to access and modify the internal state, a few extra operations on
-the monad State s are introduced. The ﬁrst operation, update, modiﬁes the state
+the monad State s are introduced. The first operation, update, modifies the state
 by applying a given function, and returns the old state as the result value of the
-computation. The remaining two operations are deﬁned in terms of update: set
+computation. The remaining two operations are defined in terms of update: set
 replaces the state with a new state, and returns the old state as the result; fetch
 returns the state without modifying it.
+
 update
 set
 fetch
@@ -2133,9 +2305,11 @@ set s
 = update (\_ -> s)
 fetch
 = update id
-In fact State s is not the only monad for which it makes sense to deﬁne these
+
+In fact State s is not the only monad for which it makes sense to define these
 operations. For this reason we encapsulate the extra operations in a class, so that
 the same names can be used for the operations of diﬀerent monads:
+
 class Monad m => StateMonad m s where
 update :: (s -> s) -> m s
 
@@ -2154,34 +2328,42 @@ fetch
 
 This declaration can be read as follows: a type constructor m and a type s are
 together a member of the class StateMonad if m is a member of the class Monad,
-and if m is also equipped with update, set, and fetch operations of the speciﬁed
-types. Moreover, the fact that set and fetch can be deﬁned in terms of update is
-also reﬂected in the declaration, by means of default deﬁnitions.
+and if m is also equipped with update, set, and fetch operations of the specified
+types. Moreover, the fact that set and fetch can be defined in terms of update is
+also reflected in the declaration, by means of default definitions.
+
 Now because State s is already a monad, it can be made into a state monad
-using the update operation as deﬁned earlier:
+using the update operation as defined earlier:
+
 instance StateMonad (State s) s where
 -- update :: (s -> s) -> State s s
 update f
 = \s -> (s, f s)
+
 7.4 The parameterised state-transformer monad
+
 Recall now our type of combinator parsers:
 type Parser a = String -> [(a,String)]
-We see now that parsers combine two kinds of computation: non-deterministic computations (the result of a parser is a list), and stateful computations (the state is the
-string being parsed). Abstracting from the speciﬁc case of returning a list of results,
-the Parser type gives rise to a generalised version of the State type constructor
-that applies a given type constructor m to the result of the computation:
-type StateM m s a = s -> m (a,s)
-Now StateM m s can be made into a monad with a zero and a plus, by inheriting
-the monad operations from the base monad m:
-instance Monad m => Monad (StateM m s) where
--- result
-:: a -> StateM m s a
+
+We see now that parsers combine two kinds of computation:
+non-deterministic computations (the result of a parser is a list), and
+stateful computations (the state is the string being
+parsed). Abstracting from the specific case of returning a list of
+results, the Parser type gives rise to a generalised version of the
+State type constructor that applies a given type constructor m to the
+result of the computation: type StateM m s a = s -> m (a,s) Now StateM
+m s can be made into a monad with a zero and a plus, by inheriting the
+monad operations from the base monad m: 
+
+instance Monad m => Monad (StateM m s) where 
+-- result :: a -> StateM m s a
 result v
 = \s -> result (v,s)
 -- bind
 :: StateM m s a ->
 -(a -> StateM m s b) -> StateM m s b
 stm ‘bind‘ f = \s -> stm s ‘bind‘ \(v,s’) -> f v s’
+
 instance Monad0Plus m => Monad0Plus (StateM m s) where
 -- zero
 :: StateM m s a
@@ -2197,29 +2379,34 @@ stm ++ stm’ = \s -> stm s ++ stm’ s
 
 That is, result converts a value into a computation that returns this value without
 modifying the internal state; bind chains two computations together; zero is the
-computation that fails regardless of the input state; and ﬁnally, (++) is a choice
+computation that fails regardless of the input state; and finally, (++) is a choice
 operation that passes the same input state through to both of the argument computations, and combines their results.
-In the previous section we deﬁned the extra operations update, set and fetch
-for the monad State s. Of course, these operations can also be deﬁned for the
+
+In the previous section we defined the extra operations update, set and fetch
+for the monad State s. Of course, these operations can also be defined for the
 parameterised state-transformer monad StateM m s. As previously, we only need
-to deﬁne update, the remaining two operations being deﬁned automatically via
-default deﬁnitions:
+to define update, the remaining two operations being defined automatically via
+default definitions:
+
 instance Monad m => StateMonad (StateM m s) s where
 -- update :: Monad m => (s -> s) -> StateM m s s
 update f
 = \s -> result (s, f s)
 
 7.5 The parser monad revisited
+
 Recall once again our type of combinator parsers:
 type Parser a = String -> [(a,String)]
+
 This type can now be re-expressed using the parameterised state-transformer monad
 StateM m s by taking [] for m, and String for s:
 type Parser a = StateM [] String a
+
 But why view the Parser type in this way? The answer is that all the basic parser
-combinators no longer need to be deﬁned explicitly (except one, the parser item for
+combinators no longer need to be defined explicitly (except one, the parser item for
 single characters), but rather arise as an instance of the general case of extending
 monad operations from a type constructor m to the type constructor StateM m s.
-More speciﬁcally, since [] forms a monad with a zero and a plus, so does State []
+More specifically, since [] forms a monad with a zero and a plus, so does State []
 String, and hence Gofer automatically provides the following combinators:
 result
 bind
@@ -2236,11 +2423,11 @@ Parser a -> (a -> Parser b) -> Parser b
 Parser a
 Parser a -> Parser a -> Parser a
 
-Moreover, deﬁning the parser monad in this modular way in terms of StateM
-means that, if we change the type of parsers, then new combinators for the modiﬁed
-type are also deﬁned automatically. For example, consider replacing
+Moreover, defining the parser monad in this modular way in terms of StateM
+means that, if we change the type of parsers, then new combinators for the modified
+type are also defined automatically. For example, consider replacing
 type Parser a = StateM [] String a
-by a new deﬁnition in which the list type constructor [] (which captures nondeterministic computations that can return many results) is replaced by the Maybe
+by a new definition in which the list type constructor [] (which captures nondeterministic computations that can return many results) is replaced by the Maybe
 type constructor (which captures deterministic computations that either fail, returning no result, or succeed with a single result):
 
 30
@@ -2251,11 +2438,13 @@ data Maybe a
 = Just a | Nothing
 
 type Parser a = StateM Maybe String a
-Since Maybe forms a monad with a zero and a plus, so does the re-deﬁned Parser
+
+Since Maybe forms a monad with a zero and a plus, so does the re-defined Parser
 type constructor, and hence Gofer automatically provides result, bind, zero, and
 (++) combinators for deterministic parsers. In earlier approaches that do not exploit
 the monadic nature of parsers (Wadler, 1985; Hutton, 1992; Fokker, 1995), the basic
-combinators would have to be re-deﬁned by hand.
+combinators would have to be re-defined by hand.
+
 The only basic parsing primitive that does not arise from the monadic structure
 of the Parser type is the parser item for consuming single characters:
 item :: Parser Char
@@ -2263,24 +2452,27 @@ item = \inp -> case inp of
 []
 -> []
 (x:xs) -> [(x,xs)]
-However, item can now be re-deﬁned in monadic style. We ﬁrst fetch the current
+However, item can now be re-defined in monadic style. We first fetch the current
 state (the input string); if the string is empty then the item parser fails, otherwise
-the ﬁrst character is consumed (by applying the tail function to the state), and
+the first character is consumed (by applying the tail function to the state), and
 returned as the result value of the parser:
 item
 
 = [x | (x:_) <- update tail]
 
-The advantage of the monadic deﬁnition of item is that it does not depend upon
+The advantage of the monadic definition of item is that it does not depend upon
 the internal details of the Parser type. Thus, for example, it works equally well for
 both the non-deterministic and deterministic versions of Parser.
+
 8 Handling the oﬀside rule
+
 Earlier (section 6) we showed that the need for a lexer to handle white-space,
 comments, and keywords can be avoided by using special combinators within the
 main parser. Another task usually performed by a lexer is handling the Gofer oﬀside
-rule. This rule allows the grouping of deﬁnitions in a program to be indicated
+rule. This rule allows the grouping of definitions in a program to be indicated
 using indentation, and is usually implemented by the lexer inserting extra tokens
 (concerning indentation) into its output stream.
+
 In this section we show that Gofer’s oﬀside rule can be handled in a simple and
 natural manner without a separate lexer, by once again using special combinators.
 Our approach was inspired by the monadic view of parsers, and is a development
@@ -2298,25 +2490,25 @@ b = 10
 c = 15 - 5
 d = a * 2
 It is clear from the use of indentation that a and d are intended to be global
-deﬁnitions, with b and c local deﬁnitions to a. Indeed, the above program can be
-viewed as a shorthand for the following program, in which the grouping of deﬁnitions
+definitions, with b and c local definitions to a. Indeed, the above program can be
+viewed as a shorthand for the following program, in which the grouping of definitions
 is made explicit using special brackets and separators:
 { a = b + c
 where
 { b = 10
 ; c = 15 - 5 }
 ; d = a * 2 }
-How the grouping of Gofer deﬁnitions follows from their indentation is formally
-speciﬁed by the oﬀside rule. The essence of the rule is as follows: consecutive deﬁnitions that begin in the same column c are deemed to be part of the same group.
+How the grouping of Gofer definitions follows from their indentation is formally
+specified by the oﬀside rule. The essence of the rule is as follows: consecutive definitions that begin in the same column c are deemed to be part of the same group.
 To make parsing easier, it is further required that the remainder of the text of each
-deﬁnition (excluding white-space and comments, of course) in a group must occur
-in a column strictly greater than c. In terms of the oﬀside rule then, deﬁnitions a
+definition (excluding white-space and comments, of course) in a group must occur
+in a column strictly greater than c. In terms of the oﬀside rule then, definitions a
 and d in the example program above are formally grouped together (and similarly
 for b and c) because they start in the same column as one another.
 8.2 Modifying the type of parsers
 To implement the oﬀside rule, we will have to maintain some extra information
 during parsing. First of all, since column numbers play a crucial role in the oﬀside
-rule, parsers will need to know the column number of the ﬁrst character in their
+rule, parsers will need to know the column number of the first character in their
 input string. In fact, it turns out that parsers will also require the current line
 number. Thus our present type of combinator parsers,
 type Parser a = StateM [] String a
@@ -2331,29 +2523,29 @@ type Pos
 
 = (Int,Int)
 
-In addition, parsers will need to know the starting position of the current deﬁnition being parsed — if the oﬀside rule is not in eﬀect, this deﬁnition position can
+In addition, parsers will need to know the starting position of the current definition being parsed — if the oﬀside rule is not in eﬀect, this definition position can
 be set with a negative column number. Thus our type of parsers is revised once
-more, to take the current deﬁnition position as an extra argument:
+more, to take the current definition position as an extra argument:
 type Parser a = Pos -> StateM [] Pstring a
 
 32
 
 Graham Hutton and Erik Meijer
 
-Another option would have been to maintain the deﬁnition position in the parser
-state, along with the current position and the string to be parsed. However, deﬁnition positions can be nested, and supplying the position as an extra argument to
+Another option would have been to maintain the definition position in the parser
+state, along with the current position and the string to be parsed. However, definition positions can be nested, and supplying the position as an extra argument to
 parsers — as opposed to within the parser state — is more natural from the point
 of view of implementing nesting of positions.
 Is the revised Parser type still a monad? Abstracting from the details, the body
-of the Parser type deﬁnition is of the form s -> m a (in our case s is Pos, m is the
+of the Parser type definition is of the form s -> m a (in our case s is Pos, m is the
 monad StateM [] Pstring, and a is the parameter type a.) We recognise this as
 being similar to the type s -> m (a,s) of parameterised state-transformers, the
 diﬀerence being that the type s of states no longer occurs in the type of the result:
-in other words, the state can be read, but not modiﬁed. Thus we can think of s ->
+in other words, the state can be read, but not modified. Thus we can think of s ->
 m a as the type of parameterised state-readers. The monadic nature of this type is
 the topic of the next section.
 8.3 The parameterised state-reader monad
-Consider the type constructor ReaderM, deﬁned as follows:
+Consider the type constructor ReaderM, defined as follows:
 type ReaderM m s a = s -> m a
 In a similar way to StateM m s, ReaderM m s can be made into a monad with a
 zero and a plus, by inheriting the monad operations from the base monad m:
@@ -2378,7 +2570,7 @@ srm ++ srm’ = \s -> srm s ++ srm’ s
 That is, result converts a value into a computation that returns this value without
 consulting the state; bind chains two computations together, with the same state
 being passed to both computations (contrast with the bind operation for StateM,
-in which the second computation receives the new state produced by the ﬁrst computation); zero is the computation that fails; and ﬁnally, (++) is a choice operation
+in which the second computation receives the new state produced by the first computation); zero is the computation that fails; and finally, (++) is a choice operation
 that passes the same state to both of the argument computations.
 To allow us to access and set the state, a couple of extra operations on the
 parameterised state-reader monad ReaderM m s are introduced. As for StateM, we
@@ -2414,7 +2606,7 @@ type Parser a = ReaderM (StateM [] Pstring) Pos a
 Now since [] forms a monad with a zero and a plus, so does StateM [] Pstring,
 and hence so does ReaderM (StateM [] Pstring) Pos. Thus Gofer automatically
 provides result, bind, zero, and (++) operations for parsers that can handle the
-oﬀside rule. Since the type of parsers is now deﬁned in terms of ReaderM at the top
+oﬀside rule. Since the type of parsers is now defined in terms of ReaderM at the top
 level, the extra operations env and setenv are also provided for parsers. Moreover,
 the extra operation update (and the derived operations set and fetch) from the
 underlying state monad can be lifted to the new type of parsers — or more generally,
@@ -2423,8 +2615,8 @@ instance StateMonad m a => StateMonad (ReaderM m s) a where
 -- update :: StateMonad m a => (a -> a) -> ReaderM m s a
 update f
 = \_ -> update f
-Now that the internal state of parsers has been modiﬁed (from String to Pstring),
-the parser item for consuming single characters from the input must also be modiﬁed. The new deﬁnition for item is similar to the old,
+Now that the internal state of parsers has been modified (from String to Pstring),
+the parser item for consuming single characters from the input must also be modified. The new definition for item is similar to the old,
 item :: Parser Char
 item = [x | (x:_) <- update tail]
 
@@ -2433,18 +2625,18 @@ item = [x | (x:_) <- update tail]
 Graham Hutton and Erik Meijer
 
 except that the item parser now fails if the position of the character to be consumed
-is not onside with respect to current deﬁnition position:
+is not onside with respect to current definition position:
 item :: Parser Char
 item = [x | (pos,x:_) <- update newstate
 , defpos
 <- env
 , onside pos defpos]
-A position is onside if its column number is strictly greater than the current deﬁnition column. However, the ﬁrst character of a new deﬁnition begins in the same
-column as the deﬁnition column, so this is handled as a special case:
+A position is onside if its column number is strictly greater than the current definition column. However, the first character of a new definition begins in the same
+column as the definition column, so this is handled as a special case:
 onside
 :: Pos -> Pos -> Bool
 onside (l,c) (dl,dc) = (c > dc) || (l == dl)
-The remaining auxiliary function, newstate, consumes the ﬁrst character from the
+The remaining auxiliary function, newstate, consumes the first character from the
 input string, and updates the current position accordingly (for example, if a newline
 character was consumed, the current line number is incremented, and the current
 column number is set back to zero):
@@ -2458,29 +2650,29 @@ newpos = case x of
 _
 -> (l,c+1)
 One aspect of the oﬀside rule still remains to be addressed: for the purposes
-of this rule, white-space and comments are not signiﬁcant, and should always be
+of this rule, white-space and comments are not significant, and should always be
 successfully consumed even if they contain characters that are not onside. This can
-be handled by temporarily setting the deﬁnition position to (0, −1) within the junk
+be handled by temporarily setting the definition position to (0, −1) within the junk
 parser for white-space and comments:
 junk :: Parser ()
 junk = [() | _ <- setenv (0,-1) (many (spaces +++ comment))]
-All that remains now is to deﬁne a combinator that parses a sequence of deﬁnitions subject to the Gofer oﬀside rule:
+All that remains now is to define a combinator that parses a sequence of definitions subject to the Gofer oﬀside rule:
 many1_offside :: Parser a -> Parser [a]
 many1_offside p = [vs | (pos,_) <- fetch
 , vs
 <- setenv pos (many1 (off p))]
 That is, many1 offside p behaves just as many1 (off p), except that within this
-parser the deﬁnition position is set to the current position. (There is no need to
+parser the definition position is set to the current position. (There is no need to
 skip white-space and comments before setting the position, since this will already
 have been eﬀected by proper use of the lexical combinators token and parse.) The
-auxiliary combinator off takes care of setting the deﬁnition position locally for
+auxiliary combinator off takes care of setting the definition position locally for
 
 Monadic Parser Combinators
 
 35
 
-each new deﬁnition in the sequence, where a new deﬁnition begins if the column
-position equals the deﬁnition column position:
+each new definition in the sequence, where a new definition begins if the column
+position equals the definition column position:
 off :: Parser a -> Parser a
 off p = [v | (dl,dc)
 <- env
@@ -2488,20 +2680,20 @@ off p = [v | (dl,dc)
 , c == dc
 , v
 <- setenv (l,dc) p]
-For completeness, we also deﬁne a combinator many offside that has the same
+For completeness, we also define a combinator many offside that has the same
 behaviour as the combinator many1 offside, except that it can also parse an empty
-sequence of deﬁnitions:
+sequence of definitions:
 many_offside :: Parser a -> Parser [a]
 many_offside p = many1_offside p +++ [[]]
-To illustrate the use of the new combinators deﬁned above, let us modify our
-parser for λ-expressions (section 6.2) so that the “let” construct permits nonempty sequences of local deﬁnitions subject to the oﬀside rule. The datatype Expr of
-expressions is ﬁrst modiﬁed so that the Let constructor has type [(String,Expr)]
+To illustrate the use of the new combinators defined above, let us modify our
+parser for λ-expressions (section 6.2) so that the “let” construct permits nonempty sequences of local definitions subject to the oﬀside rule. The datatype Expr of
+expressions is first modified so that the Let constructor has type [(String,Expr)]
 -> Expr instead of String -> Expr -> Expr:
 data Expr = ...
 | Let [(String,Expr)] Expr
 | ...
-The only part of the parser that needs to be modiﬁed is the parser local for local
-deﬁnitions, which now accepts sequences:
+The only part of the parser that needs to be modified is the parser local for local
+definitions, which now accepts sequences:
 local = [Let ds e |
 ,
 ,
@@ -2525,15 +2717,15 @@ expr]
 , e <- expr]
 
 We conclude this section by noting that the use of the oﬀside rule when laying out
-sequences of Gofer deﬁnitions is not mandatory. As shown in our initial example, one
+sequences of Gofer definitions is not mandatory. As shown in our initial example, one
 also has the option to include explicit layout information in the form of parentheses
-“{” and “}” around the sequence, with deﬁnitions separated by semi-colons “;”.
-We leave it as an exercise to the reader to use many offside to deﬁne a combinator
+“{” and “}” around the sequence, with definitions separated by semi-colons “;”.
+We leave it as an exercise to the reader to use many offside to define a combinator
 that implements this convention.
 In summary then, to permit combinator parsers to handle the Gofer oﬀside rule,
-we changed the type of parsers to include some positional information, modiﬁed
-the item and junk combinators accordingly, and deﬁned two new combinators:
-many1 offside and many offside. All other necessary redeﬁning of combinators
+we changed the type of parsers to include some positional information, modified
+the item and junk combinators accordingly, and defined two new combinators:
+many1 offside and many offside. All other necessary redefining of combinators
 is done automatically by the Gofer type system.
 
 36
@@ -2541,14 +2733,14 @@ is done automatically by the Gofer type system.
 Graham Hutton and Erik Meijer
 9 Acknowledgements
 
-The ﬁrst author was employed by the University of Utrecht during part of the
+The first author was employed by the University of Utrecht during part of the
 writing of this article, for which funding is gratefully acknowledged.
 Special thanks are due to Luc Duponcheel for many improvements to the implementation of the combinator libraries in Gofer (particularly concerning the use
 of type classes and restricted type synonyms), and to Mark P. Jones for detailed
-comments on the ﬁnal draft of this article.
-10 Appendix: a parser for data deﬁnitions
+comments on the final draft of this article.
+10 Appendix: a parser for data definitions
 To illustrate the monadic parser combinators developed in this article in a real-life
-setting, we consider the problem of parsing a sequence of Gofer datatype deﬁnitions.
+setting, we consider the problem of parsing a sequence of Gofer datatype definitions.
 An example of such a sequence is as follows:
 data List a = Nil | Cons a (List a)
 data Tree a b = Leaf a
@@ -2563,7 +2755,7 @@ type Data = (String,
 -- constructors and arguments
 
 The representation Type for types will be treated shortly. A parser datadecls ::
-Parser [Data] for a sequence of datatypes can now be deﬁned by
+Parser [Data] for a sequence of datatypes can now be defined by
 datadecls
 
 = many_offside datadecl
@@ -2604,7 +2796,7 @@ condecl
 There are a couple of points worth noting about this parser. Firstly, all lexical
 issues (white-space and comments, the oﬀside rule, and keywords) are handled by
 combinators. And secondly, since constructor is a parser for a complete token, the
-token combinator is applied within its deﬁnition.
+token combinator is applied within its definition.
 
 Monadic Parser Combinators
 
@@ -2636,7 +2828,7 @@ constructor
 tuple
 list
 
-A parser type0 :: Parser Type for types can now be deﬁned by
+A parser type0 :: Parser Type for types can now be defined by
 type0
 type1
 type2
@@ -2700,7 +2892,7 @@ Mogensen, Torben. (1993). Ratatosk: a parser generator and scanner generator for
 University of Copenhagen (DIKU).
 Moggi, Eugenio. (1989). Computation lambda-calculus and monads. Proc. IEEE symposium on logic in computer science. A extended version of the paper is available as a
 technical report from the University of Edinburgh.
-R¨jemo, Niklas. (1995). Garbage collection and memory eﬃciency in lazy functional lano
+R¨jemo, Niklas. (1995). Garbage collection and memory efficiency in lazy functional lano
 guages. Ph.D. thesis, Chalmers University of Technology.
 Spivey, Mike. (1990). A functional theory of exceptions. Science of computer programming,
 14, 25–42.
@@ -2775,7 +2967,7 @@ The built-in function foldr1 is such that, for example, foldr1 g [a,b,c,d] = a
 then, foldr1 places the choice operator (++) between each parser in the list. Using
 ops, our addop parser can now be defined by
 addop = ops [(char ’+’, (+)), (char ’-’, (-))]
-A possible ineﬃciency in the definition of the chainl1 combinator is the construction of the intermediate list fys. This can be avoided by giving a direct recursive definition of chainl1 that does not make use of foldl and many, using an
+A possible inefficiency in the definition of the chainl1 combinator is the construction of the intermediate list fys. This can be avoided by giving a direct recursive definition of chainl1 that does not make use of foldl and many, using an
 accumulating parameter to construct the final result:
 chainl1
 :: Parser a -> Parser (a -> a -> a) -> Parser a
@@ -2849,12 +3041,12 @@ non-termination of the parser. They also avoid the need for left-factorisation o
 grammar, that would otherwise result in unnecessary backtracking; we will return
 to this point in the next section.
 
-5 Eﬃciency of parsers
-Using combinators is a simple and ﬂexible method of building parsers. However,
+5 Efficiency of parsers
+Using combinators is a simple and flexible method of building parsers. However,
 the power of the combinators — in particular, their ability to backtrack and return
 multiple results — can lead to parsers with unexpected space and time performance
 if one does not take care. In this section we outline some simple techniques that can
-be used to improve the eﬃciency of parsers. Readers interested in further techniques
+be used to improve the efficiency of parsers. Readers interested in further techniques
 are referred to R¨jemo’s thesis (1995), which contains a chapter on the use of heap
 o
 profiling tools in the optimisation of parser combinators.
@@ -2877,7 +3069,7 @@ sub
 = [x+y | x <- nat, _ <- char ’+’, y <- nat]
 = [x-y | x <- nat, _ <- char ’-’, y <- nat]
 
-This parser gives the correct results, but is ineﬃcient. For example, when parsing
+This parser gives the correct results, but is inefficient. For example, when parsing
 the string "123-456" the number 123 will first be parsed by the add parser, that
 will then fail because there is no ‘+’ symbol following the number. The correct parse
 will only be found by backtracking in the input string, and parsing the number 123
@@ -2892,13 +3084,13 @@ sub x = [x+y | _ <- char ’-’, y <- nat]
 This new version of eval gives the same results as the original version, but requires
 no backtracking. Using the new eval, the string "123-456" can now be parsed in
 linear time. In fact we can go a little further, and right factorise the remaining
-use of nat in both add and sub. This does not improve the eﬃciency of eval, but
+use of nat in both add and sub. This does not improve the efficiency of eval, but
 arguably gives a cleaner parser:
 eval = [f x y | x <- nat
 , f <- ops [(char ’+’, (+)), (char ’-’, (-))]
 , y <- nat]
 In practice, most cases where left factorisation of a parser is necessary to improve
-eﬃciency will concern parsers for some kind of expression. In such cases, manually
+efficiency will concern parsers for some kind of expression. In such cases, manually
 factorising the parser will not be required, since expression-like parsers can be built
 using the chain combinators from the previous section, which already encapsulate
 the necessary left factorisation.
@@ -2967,7 +3159,7 @@ hand, applying number to "123" gives the result [(123,""), (0,"123")], whereas
 we only really want the single result [(123,"")].
 One solution to the above problem is to make use of deterministic parser combinators (see section 7.5) — all parsers built using such combinators are restricted
 by construction to producing at most one result. A more general solution, however,
-is to retain the ﬂexibility of the non-deterministic combinators, but to provide a
+is to retain the flexibility of the non-deterministic combinators, but to provide a
 means to make explicit that we are only interested in the first result produced by
 certain parsers, such as number. This is the purpose of the first combinator:
 first :: Parser a -> Parser a
@@ -2982,7 +3174,7 @@ version (+++) of the standard choice combinator (++) for parsers:
 p +++ q = first (p ++ q)
 Replacing (++) by (+++) in number gives the desired behaviour.
 As well as being used to ensure the correct behaviour of parsers, using (+++) can
-also improve their eﬃciency. As an example, consider a parser that accepts either
+also improve their efficiency. As an example, consider a parser that accepts either
 of the strings "yellow" or "orange":
 colour :: Parser String
 colour = p1 ++ p2
@@ -2992,7 +3184,7 @@ p2 = string "orange"
 Recall now the behaviour of the choice combinator (++): it takes a string, applies
 both argument parsers to this string, and concatenates the resulting lists. Thus in
 the colour example, if p1 is successfully applied then p2 will still be applied to the
-same string, even though it is guaranteed to fail. This ineﬃciency can be avoided
+same string, even though it is guaranteed to fail. This inefficiency can be avoided
 using (+++), which ensures that if p1 succeeds then p2 is never applied:
 colour = p1 +++ p2
 where
@@ -3000,8 +3192,8 @@ p1 = string "yellow"
 p2 = string "orange"
 More generally, if we know that a parser of the form p ++ q is deterministic (only
 ever returns at most one result value), then p +++ q has the same behaviour, but is
-more eﬃcient: if p succeeds then q is never applied. In the remainder of this article
-it will mostly be the (+++) choice combinator that is used. For reasons of eﬃciency,
+more efficient: if p succeeds then q is never applied. In the remainder of this article
+it will mostly be the (+++) choice combinator that is used. For reasons of efficiency,
 
 22
 
@@ -3217,7 +3409,7 @@ that, if we change the nature of parsers by modifying the base monad (for exampl
 limiting parsers to producing at most one result), new combinators for the modified
 monad of parsers are also defined automatically.
 7.1 The exception monad
-Before starting to define other monads, it is useful to first focus brieﬂy on the
+Before starting to define other monads, it is useful to first focus briefly on the
 intuition behind the use of monads in functional programming (Wadler, 1992a).
 The basic idea behind monads is to distinguish the values that a computation
 can produce from the computation itself. More specifically, given a monad m and
@@ -3398,7 +3590,7 @@ This declaration can be read as follows: a type constructor m and a type s are
 together a member of the class StateMonad if m is a member of the class Monad,
 and if m is also equipped with update, set, and fetch operations of the specified
 types. Moreover, the fact that set and fetch can be defined in terms of update is
-also reﬂected in the declaration, by means of default definitions.
+also reflected in the declaration, by means of default definitions.
 Now because State s is already a monad, it can be made into a state monad
 using the update operation as defined earlier:
 instance StateMonad (State s) s where
@@ -3942,7 +4134,7 @@ Mogensen, Torben. (1993). Ratatosk: a parser generator and scanner generator for
 University of Copenhagen (DIKU).
 Moggi, Eugenio. (1989). Computation lambda-calculus and monads. Proc. IEEE symposium on logic in computer science. A extended version of the paper is available as a
 technical report from the University of Edinburgh.
-R¨jemo, Niklas. (1995). Garbage collection and memory eﬃciency in lazy functional lano
+R¨jemo, Niklas. (1995). Garbage collection and memory efficiency in lazy functional lano
 guages. Ph.D. thesis, Chalmers University of Technology.
 Spivey, Mike. (1990). A functional theory of exceptions. Science of computer programming,
 14, 25–42.
@@ -3988,14 +4180,49 @@ Marktoberdorf Summer school on program design calculi. Springer–Verlag.
                (fdefinition (first option-args))
                (list (class-of <interface>)))))
   
+  (defgeneric interface-options (<interface>)
+     (:method-combination append))
+  
   (defmacro define-interface (name direct-superinterfaces direct-slots
                               &rest options)
-    `(progn  
+    `(cl:progn  
        (defclass ,name ,direct-superinterfaces ,direct-slots)
        ,@(loop :for (oname . args)  :in options
             :collect (apply #'expand-interface-option name oname args))
        (defmethod interface-options append ((<i> ,name))
                   '(,@options))))
+  
+  (define-interface <interface> ()
+    ())
+  
+  (defgeneric expand-interface-flet (<interface> body 
+                                     &key package symbol-name
+                                       &allow-other-keys)
+    (:method ((<i> symbol) body &rest args &key &allow-other-keys)
+      (apply #'expand-interface-flet (symbol-value <i>) body args))
+    (:method ((<i> <interface>) body &key package (symbol-name #'symbol-name)
+                                          interface-name
+                            &allow-other-keys)
+      (let ((interface-name (or interface-name 
+                                (class-name (class-of <i>)))))
+        `(flet (,@(loop :for (name . args) 
+                     :in (interface-options <i>)
+                     :when (eq name :generic)
+                     :collect (let* ((gf-name (first args))
+                                     (gf-package (symbol-package gf-name))
+                                     (f-package (or package gf-package))
+                                     (f-name (intern (funcall symbol-name gf-name) 
+                                                     f-package)))
+                                `(,f-name (&rest args)
+                                          (apply ',gf-name ,interface-name args)))))
+           ,@body))))
+  
+   
+  (defmacro with-interface ((interface &rest args)
+                            &body body)
+    (apply #'expand-interface-flet interface body args))
+   
+  
   
   (defun check-interface-type (<interface>)
     (loop :for option :in (interface-options <interface>)
@@ -4006,10 +4233,7 @@ Marktoberdorf Summer school on program design calculi. Springer–Verlag.
   (deftype interface ()
     `(satisfies check-interface-type))
   
-  (define-interface <interface> ()
-    ()
-    (:generic interface-options (<interface>)
-              (:method-combination append)))
+  
   
   ;; (macroexpand-1 '(define-interface <interface> ()
   ;;               ()
@@ -4027,7 +4251,168 @@ Marktoberdorf Summer school on program design calculi. Springer–Verlag.
     
   
 #+end_src
+** Pure Smug
+#+header: :shebang #+quicklisp (quote #.(ql:quickload "closer-mop"))
+#+begin_src lisp :tangle ../pure.lisp :noweb yes
+  (defpackage :drewc.org/smug/pure
+    (:use :cl)
+    (:shadow #:satisfies
+             #:first
+             #:progn
+             #:prog1
+             #:prog2
+             #:every
+             #:some)
+    (:export 
+    
+     #:<monad>
+     #:result
+     #:bind
+     #:mlet*
+      
+     #:<zero-plus>
+     #:zero
+     #:plus 
+     
+     #:<monad-zero-plus>
+     #:guard
+     
+     
+     #:<parser>     
+     #:item     
+     
+     ;; Parser Library
+     #:is
+     #:is-not
+     #:split
+     #:maybe
+     
+     ;;; Shadows CL
+     #:first
+     #:satisfies 
+     #:every
+     #:some
+     #:progn
+     #:prog1
+     #:prog2
+     ))
+   
+  (in-package :drewc.org/smug/pure)
+   
+  (eval-when (:compile-toplevel :load-toplevel :execute)
+   (flet ((first (list) (cl:first list)))
+   
+    <<lisp define interface>>
+   
+    <<lisp <monad> interface>>
+    
+    <<lisp <zero-plus> interface>>
+    <<lisp <monad-zero-plus> guard>>
+   
+    <<lisp <parser> interface>>
+   
+    <<lisp <parser> result and bind definition>>
+   
+    <<lisp <parser> zero/plus definition>>
+   
+    <<lisp mlet*>> ))
+  
+  
+  <<lisp <parser> satisfies>>
 
+  << first <parser> lisp >>
+
+  << maybe <parser> lisp >>
+
+  (defun is (predicate &rest args)
+    (apply #'satisfies predicate args))
+    
+  (defun is-not (predicate &rest args)
+    (satisfies (lambda (i) 
+                 (not (apply predicate i args)))))
+      
+  (defun some (parser)
+    (mlet* <parser> ()
+      (maybe (mlet* <parser> 
+                ((x parser)
+                 (xs (some parser)))
+              (result (cons x xs)))
+            (result nil))))
+   
+  (defun every (parser)
+    (mlet* <parser>
+        ((x parser)
+         (xs (some parser)))
+      (result (cons x xs))))
+   
+  (defun progn (parser &rest parsers)
+    (if parsers 
+        (mlet* <parser> ((_ parser))
+          (apply #'progn parsers))
+        parser))
+     
+  (defun prog1 (parser &rest parsers)
+    (mlet* <parser> ((parser1 parser)
+                     (_ (if parsers 
+                            (apply #'progn parsers)
+                            (result t))))
+      (result parser1)))
+  
+  (defun prog2 (parser1 parser2 &rest parsers)
+    (mlet* <parser> ()
+      (progn parser1 (apply #'prog1 parser2 parsers))))
+  
+  (defun split (parser &key (by (is #'char= #\space))
+                         (using #'some))
+    (mlet* <parser> 
+        ((x parser)
+         (xs (funcall using 
+               (progn by parser))))
+      (result (cons x xs))))
+                                            
+#+end_src
+
+*** Pure Smug dotted package
+
+For no conflicts with cl, every symbol starts with a #\.
+
+#+begin_src lisp :tangle ../pure/dot.lisp :noweb yes
+  (defpackage :drewc.org/smug/pure/dot
+    (:use)
+    (:import-from :drewc.org/smug/pure)
+    #.`(:export ,@(when (find-package :drewc.org/smug/pure/dot)
+                        (let (export)
+                          (do-external-symbols (s :drewc.org/smug/pure/dot)
+                            (push s export))
+                          (nreverse export)))))
+   
+  (in-package :drewc.org/smug/pure)
+    
+  (do-external-symbols (symbol :drewc.org/smug/pure)
+    (let ((dot-symbol (intern (format nil ".~S" symbol) :drewc.org/smug/pure/dot)))
+      (when (fboundp symbol)
+        (if (macro-function symbol)
+            (setf (macro-function dot-symbol) (macro-function symbol))
+            (setf (fdefinition dot-symbol) (fdefinition symbol))))
+      (eval `(define-symbol-macro ,dot-symbol ,symbol))
+      (export dot-symbol :drewc.org/smug/pure/dot))
+    )
+  
+  (defmacro drewc.org/smug/pure/dot::.let* (bindings &body body)
+    `(mlet* (<parser> :package :drewc.org/smug/pure/dot
+                      :symbol-name #.(lambda (s)
+                                       (concatenate 
+                                        'string "." (symbol-name s))))
+         ,bindings ,@body))
+  
+  (export 'drewc.org/smug/pure/dot::.let* :drewc.org/smug/pure/dot)
+    
+    
+  
+    
+                                            
+  
+#+end_src
 ** Test Lisp parser
 #+begin_src lisp :tangle ../test/monparsing.lisp :noweb yes
    (defpackage :drewc.org/smug/test/monparsing
@@ -4195,5 +4580,8 @@ Marktoberdorf Summer school on program design calculi. Springer–Verlag.
 
   << bracket lisp <parser> >>
 
-  << second ints lisp <parser> >>
+  << third ints lisp <parser> >>
+
+  
 #+end_src
+

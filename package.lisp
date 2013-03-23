@@ -1,52 +1,39 @@
-;;;; package.lisp
+ (defpackage :drewc.org/smug/package
+  (:nicknames :smug)
+  (:use :drewc.org/smug/pure)
+ (:export 
+  #:result
+  #:bind
+  #:let*
+  
+  #:zero
+  #:plus 
+  #:guard
+  
+  #:item
+  #:first     
+  #:maybe
+  #:satisfies
 
-(defpackage :smug
-  (:use :cl)
-  (:export 
-   #:bind
-   #:result
-   #:parse 
-   #:item
-   
-   #:=let*
-   #:=char
-   #:=and
-   #:=or
-   #:=not
-   
-   #:zero-or-more
-   #:one-or-more
-   
-   #:no-more-input
+  ;; Library 
+  #:is
+  #:is-not
+  #:split
+  #:satisfies 
+  #:every
+  #:some
+  #:progn
+  #:prog1
+  #:prog2
+))
+ 
+(in-package :drewc.org/smug/pure)
 
-   #:text
-   #:whitespace
-   #:none-of
-   #:skip-whitespace
-   
-   #:run
-   #:bracket
-   #:maybe
-   #:range
-   #:at-least
-   #:=string
-   #:one-to
-   #:zero-to
-   #:=satisfies
-   #:digit
-   #:fail
-   #:=unless
-   #:line
-   #:=prog1
-   #:string-of
-   #:=list
-   #:call
-   #:=digit-char
-   #:exactly
-   #:natural-number
-   #:int
-   #:=prog2))
 
-(defpackage :smug.examples 
-  (:use :cl :smug))
+(defmacro drewc.org/smug/package:let* (bindings 
+				       &body body)
+  `(mlet* (<parser> :package :drewc.org/smug/package)
+       ,bindings ,@body))
 
+(export 'drewc.org/smug/package:let* 
+	:drewc.org/smug/package)

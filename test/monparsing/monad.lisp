@@ -31,14 +31,49 @@
              (fdefinition (first option-args))
              (list (class-of <interface>)))))
 
+(defgeneric interface-options (<interface>)
+   (:method-combination append))
+
 (defmacro define-interface (name direct-superinterfaces direct-slots
                             &rest options)
-  `(progn  
+  `(cl:progn  
      (defclass ,name ,direct-superinterfaces ,direct-slots)
      ,@(loop :for (oname . args)  :in options
           :collect (apply #'expand-interface-option name oname args))
      (defmethod interface-options append ((<i> ,name))
                 '(,@options))))
+
+(define-interface <interface> ()
+  ())
+
+(defgeneric expand-interface-flet (<interface> body 
+                                   &key package symbol-name
+                                     &allow-other-keys)
+  (:method ((<i> symbol) body &rest args &key &allow-other-keys)
+    (apply #'expand-interface-flet (symbol-value <i>) body args))
+  (:method ((<i> <interface>) body &key package (symbol-name #'symbol-name)
+                                        interface-name
+                          &allow-other-keys)
+    (let ((interface-name (or interface-name 
+                              (class-name (class-of <i>)))))
+      `(flet (,@(loop :for (name . args) 
+                   :in (interface-options <i>)
+                   :when (eq name :generic)
+                   :collect (let* ((gf-name (first args))
+                                   (gf-package (symbol-package gf-name))
+                                   (f-package (or package gf-package))
+                                   (f-name (intern (funcall symbol-name gf-name) 
+                                                   f-package)))
+                              `(,f-name (&rest args)
+                                        (apply ',gf-name ,interface-name args)))))
+         ,@body))))
+
+ 
+(defmacro with-interface ((interface &rest args)
+                          &body body)
+  (apply #'expand-interface-flet interface body args))
+ 
+
 
 (defun check-interface-type (<interface>)
   (loop :for option :in (interface-options <interface>)
@@ -49,10 +84,7 @@
 (deftype interface ()
   `(satisfies check-interface-type))
 
-(define-interface <interface> ()
-  ()
-  (:generic interface-options (<interface>)
-            (:method-combination append)))
+
 
 ;; (macroexpand-1 '(define-interface <interface> ()
 ;;               ()
@@ -103,16 +135,25 @@
   (:singleton)
   (:generic item (<parser>)))
 
+(defgeneric item-input (<parser> input)
+  (:method ((<p> <parser>) (input cl:null))
+    input)
+  (:method ((<p> <parser>) (input cl:string))
+    (unless (string= input "")
+      (list 
+       (cons (aref input 0) 
+             (multiple-value-bind (array displaced-index-offset) 
+                 (array-displacement input) 
+               (let ((string (or array input))
+                     (index (if array (1+ displaced-index-offset) 1)))
+                 (make-array (1- (length string))
+                             :displaced-to string
+                             :displaced-index-offset index
+                             :element-type (array-element-type string)))))))))
+
 (defmethod item ((<p> <parser>))
   (lambda (input)
-    (etypecase input 
-      (cl:null nil)
-      (cl:string 
-       (unless (string= input "")
-         (list 
-          (cons 
-           (aref input 0)
-           (subseq input 1))))))))
+    (item-input <p> input)))
 
 (defmethod result ((<p> <parser>) value)
   (lambda (input) (list (cons value input))))
@@ -127,37 +168,37 @@
    (constantly NIL))
 
 (defmethod plus ((<p> <parser>) parser qarser)
-  (lambda (input) 
-    (append (funcall parser input)
-            (funcall qarser input))))
+  (lambda (input)
+    (append (funcall parser input) (funcall qarser input))))
 
 
 (defmacro mlet* (monad bindings &body body)
-  (if monad     
-      (let ((m (gensym)))
-        `(let ((,m ,monad))
-           (flet ,(loop :for (name . args) 
-                     :in (interface-options (symbol-value monad))
-                     :when (and (eq name :generic)
-                                (not (eq (first args) 
-                                         'interface-options)))
-                     :collect `(,(first args) (&rest args)
-                                 (apply ',(first args) ,m args)))
-             (mlet* nil ,bindings ,@body))))
-      (if bindings 
-          (destructuring-bind ((var form) &rest bindings)
-              bindings
-            `(bind ,form (lambda (,var) 
-                           ,@(when (string= var "_")
-                                  `((declare (ignorable ,var))))
-    
-                           (mlet* nil ,bindings
-                                  ,@body))))
-          `(progn ,@body))))  
+  (let ((interface-form (if (listp monad) monad (list monad))))    
+    (destructuring-bind (monad-interface &rest args &key (with-interface t) &allow-other-keys)
+        interface-form
+      (if with-interface 
+          `(with-interface (,monad-interface ,@args) 
+             (mlet* (,(first interface-form)
+                      :with-interface nil
+                      ,@(rest interface-form))
+                  ,bindings
+                 ,@body))
+          (if bindings 
+              (destructuring-bind ((var form) &rest rest-of-bindings)
+                  bindings
+                `(funcall 
+                  'bind ,monad-interface ,form 
+                  (lambda (,var) 
+                    ,@(when (string= var "_")
+                            `((declare (ignorable ,var))))
+                    (mlet* ,interface-form ,rest-of-bindings
+                      ,@body))))
+              `(cl:progn ,@body))))))
 
-(defun satisfies (predicate)
+
+(defun satisfies (predicate &rest args)
   (mlet* <parser> ((x (item)))
-    (guard predicate x)))       
+    (apply #'guard predicate x args)))       
 
 (mlet* <parser> ()
   
@@ -254,6 +295,12 @@
    ((xs (many1 (digit))))
   (result (read-from-string (coerce xs 'cl:string)))))
 
+#+end_sr
+
+#+name: test lisp <parser> nat
+#+begin_src lisp
+  (assert (equal '((124 . "") (12 . "4") (1 . "24")) 
+                 (funcall (nat) "124")))  
 
 (assert (equal '((124 . "") (12 . "4") (1 . "24")) 
                (funcall (nat) "124")))  
@@ -326,4 +373,12 @@
 (assert (equal (funcall (ints) "[1,234,567]")
                '(((1 234 567) . ""))))
 
-(defun)
+(defun bracket (open-parser parser close-parser)
+  (mlet* <parser>
+      ((_ open-parser)
+       (x parser)
+       (_ close-parser))
+    (result x)))
+
+(defun ints () 
+  (bracket (char #\[) (sepby1 (int) (char #\,)) (char #\])))
