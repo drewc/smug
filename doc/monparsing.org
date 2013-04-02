@@ -815,7 +815,7 @@ and a plus using the following definitions:
                    (array-displacement input) 
                  (let ((string (or array input))
                        (index (if array (1+ displaced-index-offset) 1)))
-                   (make-array (1- (length string))
+                   (make-array (1- (length input))
                                :displaced-to string
                                :displaced-index-offset index
                                :element-type (array-element-type string)))))))))
@@ -875,7 +875,7 @@ allowing them to be expressed in the following, more appealing form:
             interface-form
           (if with-interface 
               `(with-interface (,monad-interface ,@args) 
-                 (mlet* (,(first interface-form)
+                 (mlet* (,(cl:first interface-form)
                           :with-interface nil
                           ,@(rest interface-form))
                       ,bindings
@@ -1953,9 +1953,12 @@ isSpace x =
 
 Similarly, a single-line Gofer comment can be consumed as follows:
 
+#+begin_src haskell
 comment :: Parser ()
 comment = [() | _ <- string "--"
 , _ <- many (sat (\x -> x /= ’\n’))]
+#+end_src
+
 
 We leave it as an exercise for the reader to define a parser for consuming multi-line
 Gofer comments {- ... -}, which can be nested.
@@ -1965,18 +1968,21 @@ the input string. Dually, after a comment there may still be white-space. Thus w
 are motivated to defined a special parser that repeatedly consumes white-space and
 comments until no more remain:
 
+#+begin_src haskell
 junk :: Parser ()
 junk = [() | _ <- many (spaces +++ comment)]
+#+end_src
 
 Note that while spaces and comment can fail, the junk parser always succeeds. We
 define two combinators in terms of junk: parse removes junk before applying a
 given parser, and token removes junk after applying a parser:
 
+#+begin_src haskell
 parse :: Parser a -> Parser a
 parse p = [v | _ <- junk, v <- p]
 token :: Parser a -> Parser a
 token p = [v | v <- p, _ <- junk]
-
+#+end_src
 With the aid of these two combinators, parsers can be modified to ignore whitespace and comments. Firstly, parse is applied once to the parser as a whole, ensuring that input to the parser begins at a significant character. And secondly, token
 is applied once to all sub-parsers that consume complete tokens, thus ensuring that
 the input always remains at a significant character.
@@ -1986,6 +1992,8 @@ and integers), parsers of the form string xs (for symbols and keywords), and
 ident (for identifiers). It is useful to define special versions of these parsers — and
 more generally, special versions of any user-defined parsers for complete tokens —
 that encapsulate the necessary application of token:
+
+#+begin_src haskell
 natural
 natural
 
@@ -2007,6 +2015,7 @@ symbol xs
 identifier
 :: [String] -> Parser String
 identifier ks = token [x | x <- ident, not (elem x ks)]
+#+end_src
 
 Note that identifier takes a list of keywords as an argument, where a keyword
 is a string that is not permitted as an identifier. For example, in Gofer the strings
@@ -2014,14 +2023,12 @@ is a string that is not permitted as an identifier. For example, in Gofer the st
 parsers defined in terms of identifier could produce unexpected results, or involve
 unnecessary backtracking to construct the correct parse of the input string.
 
-24
-
-Graham Hutton and Erik Meijer
-6.2 A parser for λ-expressions
+** A parser for λ-expressions
 
 To illustrate the use of the new combinators given above, let us define a parser for
 simple λ-expressions extended with a “let” construct for local definitions. Parsed
 expressions will be represented in Gofer as follows:
+#+begin_src haskell
 data Expr =
 |
 |
@@ -2044,7 +2051,12 @@ lambda abstraction
 local definition
 variable
 
+
+#+end_src
+
 Now a parser expr :: Parser Expr can be defined by:
+
+#+begin_src haskell
 expr
 
 = atom ‘chainl1‘ [App]
@@ -2107,13 +2119,15 @@ expr]
 
 variable = identifier ["let","in"]
 
+#+end_src
+
 Note how the expr parser handles white-space and comments by using the symbol
 parser in place of string and char. Similarly, the keywords “let” and “in” are
 handled by using identifier to define the parser for variables. Finally, note how
 applications (f e1 e2 ... en) are parsed in the form (((f e1) e2) ... ) by
 using the chainl1 combinator.
 
-7 Factorising the parser monad
+** Factorising the parser monad
 
 Up to this point in the article, combinator parsers have been our only example of
 the notion of a monad. In this section we define a number of other monads related
@@ -4157,7 +4171,7 @@ Marktoberdorf Summer school on program design calculi. Springer–Verlag.
 ** DEFINE-INTERFACE 
 
 #+name: lisp define interface
-#+begin_src lisp  
+ #+begin_src lisp  
   (defgeneric expand-interface-option (<interface> option-name &rest option-args)
     (:method (<interface> option-name &rest option-args)
       (declare (ignore option-args)) nil)
@@ -4251,125 +4265,206 @@ Marktoberdorf Summer school on program design calculi. Springer–Verlag.
     
   
 #+end_src
-** Pure Smug
+** Pure Interface
+#+header: :shebang #+quicklisp (quote #.(ql:quickload "closer-mop")) 
+#+begin_src lisp :tangle ../pure/interface.lisp :noweb yes :padline no
+  (defpackage :drewc.org/smug/pure/interface
+      (:use :cl)
+      (:export  #:<interface> 
+                #:define-interface
+                #:with-interface))
+      
+  (in-package :drewc.org/smug/pure/interface)
+
+  <<lisp define interface>>
+#+end_src 
+** Pure Monad
 #+header: :shebang #+quicklisp (quote #.(ql:quickload "closer-mop"))
-#+begin_src lisp :tangle ../pure.lisp :noweb yes
-  (defpackage :drewc.org/smug/pure
+#+begin_src lisp :tangle ../pure/monad.lisp :noweb yes :padline no
+  (defpackage :drewc.org/smug/pure/monad
     (:use :cl)
-    (:shadow #:satisfies
-             #:first
-             #:progn
-             #:prog1
-             #:prog2
-             #:every
-             #:some)
-    (:export 
-    
+    (:import-from :drewc.org/smug/pure/interface
+                  #:define-interface
+                  #:<interface>
+                  #:with-interface)
+    (:export
      #:<monad>
      #:result
      #:bind
      #:mlet*
-      
+       
      #:<zero-plus>
      #:zero
      #:plus 
-     
-     #:<monad-zero-plus>
-     #:guard
-     
-     
-     #:<parser>     
-     #:item     
-     
-     ;; Parser Library
-     #:is
-     #:is-not
-     #:split
-     #:maybe
-     
-     ;;; Shadows CL
-     #:first
-     #:satisfies 
-     #:every
-     #:some
-     #:progn
-     #:prog1
-     #:prog2
-     ))
-   
-  (in-package :drewc.org/smug/pure)
-   
-  (eval-when (:compile-toplevel :load-toplevel :execute)
-   (flet ((first (list) (cl:first list)))
-   
-    <<lisp define interface>>
-   
-    <<lisp <monad> interface>>
-    
-    <<lisp <zero-plus> interface>>
-    <<lisp <monad-zero-plus> guard>>
-   
-    <<lisp <parser> interface>>
-   
-    <<lisp <parser> result and bind definition>>
-   
-    <<lisp <parser> zero/plus definition>>
-   
-    <<lisp mlet*>> ))
-  
-  
-  <<lisp <parser> satisfies>>
-
-  << first <parser> lisp >>
-
-  << maybe <parser> lisp >>
-
-  (defun is (predicate &rest args)
-    (apply #'satisfies predicate args))
-    
-  (defun is-not (predicate &rest args)
-    (satisfies (lambda (i) 
-                 (not (apply predicate i args)))))
       
-  (defun some (parser)
-    (mlet* <parser> ()
-      (maybe (mlet* <parser> 
-                ((x parser)
-                 (xs (some parser)))
-              (result (cons x xs)))
-            (result nil))))
-   
-  (defun every (parser)
-    (mlet* <parser>
-        ((x parser)
-         (xs (some parser)))
-      (result (cons x xs))))
-   
-  (defun progn (parser &rest parsers)
-    (if parsers 
-        (mlet* <parser> ((_ parser))
-          (apply #'progn parsers))
-        parser))
+     #:<monad-zero-plus>
+     #:guard))
+  (in-package :drewc.org/smug/pure/monad)
+  
+  <<lisp <monad> interface>>
+  
+  <<lisp mlet*>>
      
-  (defun prog1 (parser &rest parsers)
-    (mlet* <parser> ((parser1 parser)
-                     (_ (if parsers 
-                            (apply #'progn parsers)
-                            (result t))))
-      (result parser1)))
+  <<lisp <zero-plus> interface>>
   
-  (defun prog2 (parser1 parser2 &rest parsers)
-    (mlet* <parser> ()
-      (progn parser1 (apply #'prog1 parser2 parsers))))
+  <<lisp <monad-zero-plus> guard>>
+#+end_src 
+** Pure Smug
+#+begin_src lisp :tangle ../pure.lisp :noweb yes
+    (defpackage :drewc.org/smug/pure
+      (:use :cl)
+      (:import-from :drewc.org/smug/pure/interface
+                     #:define-interface
+                     #:<interface>)
+      (:import-from :drewc.org/smug/pure/monad  
+                    #:<monad>
+                    #:result
+                    #:bind
+                    #:mlet*
+         
+                    #:<zero-plus>
+                    #:zero
+                    #:plus 
+        
+                    #:<monad-zero-plus>
+                    #:guard)
+      (:shadow #:satisfies
+               #:first
+               #:not
+               #:progn
+               #:prog1
+               #:prog2
+               #:every
+               #:some
+               #:string)
+      (:export 
+       
+       #:<monad>
+       #:result
+       #:bind
+       #:mlet*
+         
+       #:<zero-plus>
+       #:zero
+       #:plus 
+        
+       #:<monad-zero-plus>
+       #:guard
+        
+                     
+       #:<parser>     
+       #:item    
+    
+       #:run
+        
+       ;; Parser Library
+       #:is
+       #:is-not
+       #:split
+       #:maybe
+        
+    ;;; Shadows CL
+       #:not
+       #:string
+       #:first
+       #:not
+       #:satisfies 
+       #:every
+       #:some
+       #:progn
+       #:prog1
+       #:prog2
+       ))
+      
+    (in-package :drewc.org/smug/pure)
+      
+        
+    <<lisp <parser> interface>>
+      
+    <<lisp <parser> result and bind definition>>
+      
+    <<lisp <parser> zero/plus definition>>
+     
+     
+    <<lisp <parser> satisfies>>
+     
+    << first <parser> lisp >>
+     
+    << maybe <parser> lisp >>
+     
+    (defun run (parser input)
+      (let ((result (funcall parser input)))
+        (values (car (cl:first result)) 
+                (cdr (cl:first result))
+                (rest result))))
+      
+     
+    (defun is (predicate &rest args)
+      (apply #'satisfies predicate args))
   
-  (defun split (parser &key (by (is #'char= #\space))
-                         (using #'some))
-    (mlet* <parser> 
-        ((x parser)
-         (xs (funcall using 
-               (progn by parser))))
-      (result (cons x xs))))
-                                            
+    (defun not (parser)
+      (let ((true (gensym)))
+        (mlet* <parser> ((true? (maybe parser (result true))))
+          (guard #'eq true? true))))
+       
+    (defun is-not (predicate &rest args)
+      (satisfies (lambda (i) 
+                   (cl:not (apply predicate i args)))))
+    
+    (defun string (string &rest args 
+                   &key (item-is #'char=)
+                     (coerce 'cl:string))
+      (if (string= string "")
+          (result <parser> nil)
+          (mlet* <parser> 
+              ((first (is item-is (aref string 0)))
+               (rest (apply 'string (subseq string 1) 
+                            :coerce nil
+                            args)))
+            (let ((list (cons first rest)))
+              (result (if coerce (coerce list coerce) list))))))
+    
+         
+    (defun some (parser)
+      (mlet* <parser> ()
+        (maybe (mlet* <parser> 
+                   ((x parser)
+                    (xs (some parser)))
+                 (result (cons x xs)))
+               (result nil))))
+      
+    (defun every (parser)
+      (mlet* <parser>
+          ((x parser)
+           (xs (some parser)))
+        (result (cons x xs))))
+      
+    (defun progn (parser &rest parsers)
+      (if parsers 
+          (mlet* <parser> ((_ parser))
+            (apply #'progn parsers))
+          parser))
+        
+    (defun prog1 (parser &rest parsers)
+       (mlet* <parser> ((parser1 parser)
+                        (_ (if parsers 
+                               (apply #'progn parsers)
+                               (result t))))
+         (result parser1)))
+     
+    (defun prog2 (parser1 parser2 &rest parsers)
+      (mlet* <parser> ()
+        (progn parser1 (apply #'prog1 parser2 parsers))))
+     
+    (defun split (parser &key (by (is #'char= #\space))
+                            (using #'some))
+       (mlet* <parser> 
+           ((x parser)
+            (xs (funcall using 
+                  (progn by parser))))
+         (result (cons x xs))))
+                                               
+    
 #+end_src
 
 *** Pure Smug dotted package
@@ -4499,8 +4594,9 @@ For no conflicts with cl, every symbol starts with a #\.
    <<test lisp word>> 
   
 #+end_src
-** Test Monadic Parser
 
+
+** Test Monadic Parser
 #+begin_src lisp :tangle ../test/monparsing/monad.lisp :noweb yes
   (defpackage :drewc.org/smug/test/monparsing/monad
    (:use :cl)
