@@ -146,7 +146,7 @@
                  (array-displacement input) 
                (let ((string (or array input))
                      (index (if array (1+ displaced-index-offset) 1)))
-                 (make-array (1- (length string))
+                 (make-array (1- (length input))
                              :displaced-to string
                              :displaced-index-offset index
                              :element-type (array-element-type string)))))))))
@@ -178,7 +178,7 @@
         interface-form
       (if with-interface 
           `(with-interface (,monad-interface ,@args) 
-             (mlet* (,(first interface-form)
+             (mlet* (,(cl:first interface-form)
                       :with-interface nil
                       ,@(rest interface-form))
                   ,bindings

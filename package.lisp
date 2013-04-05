@@ -1,14 +1,23 @@
  (defpackage :drewc.org/smug/package
   (:nicknames :smug)
   (:use :drewc.org/smug/pure)
+  (:shadow #:result
+	   #:bind
+	   #:zero
+	   #:plus 
+	   #:item
+	   #:guard)
  (:export 
   #:result
   #:bind
-  #:let*
-  
   #:zero
   #:plus 
   #:guard
+  
+  #:let*
+  
+
+  #:run
   
   #:item
   #:first     
@@ -17,9 +26,10 @@
 
   ;; Library 
   #:is
+  #:not
   #:is-not
-  #:split
-  #:satisfies 
+  #:split 
+  #:string
   #:every
   #:some
   #:progn
@@ -28,6 +38,12 @@
 ))
  
 (in-package :drewc.org/smug/pure)
+
+(defun drewc.org/smug/package:result (value)
+  (drewc.org/smug/pure:result <parser> value))
+
+(defun drewc.org/smug/package:item ()
+  (drewc.org/smug/pure:item <parser>))
 
 
 (defmacro drewc.org/smug/package:let* (bindings 
