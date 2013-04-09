@@ -9,7 +9,6 @@ smug: parsing for lisp, made easy.
   macrology.
 
 * Features
-  - pure ANSI common lisp with no external dependencies
   - parsers are first class values written in basic lisp
   - non-deterministic infinite look-ahead  
   - easy to learn, easy to use
@@ -783,12 +782,15 @@ NIL
 
   
 
-
+    
 * footnotes	 
+
 [fn:1] Monadic parser combinators (pdf, ps, bibtex) Graham Hutton and
 Erik Meijer. Technical Report NOTTCS-TR-96-4, Department of Computer
 Science, University of
-Nottingham, 1996. http://www.cs.nott.ac.uk/~gmh/bib.html#monparsing
+Nottingham, 1996.
+
+ -- http://www.cs.nott.ac.uk/~gmh/bib.html#monparsing
 
 [fn:2] http://www.willamette.edu/~fruehr/haskell/seuss.html 
 

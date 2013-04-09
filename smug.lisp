@@ -1,37 +1,15 @@
-(in-package :smug)
+(defpackage :drewc.org/smug/smug
+  (:nicknames :smug)
+  (:import-from :drewc.org/smug/library)
+  
+  (:use)
+  (:export #:let*))
 
-(defun result (value)
-  (declare (optimize (speed 3)))
-  (lambda (input)
-    (list (cons value input))))
+(in-package :drewc.org/smug/library)
 
-(defun fail (&key (error nil))
-  (if error 
-      (lambda (input)
-	(declare (ignore input)) 
-	(error error))
-      (constantly nil)))
-
-(defun item ()
-  (lambda (input)
-    (unless (input-empty-p input)
-      (list (cons (input-first input)
-		  (input-rest input))))))
-
-(defun bind (parser function)
-  (lambda (input)
-    (loop :for (value . input) :in (funcall parser input)
-          :append (funcall (funcall function value) input))))
-
-(defun run (parser input &key (result #'caar))
-  (funcall result (funcall parser input)))
-
-(defun =satisfies (predicate)
-  (bind (item) 
-	(lambda (x) 
-	  (if (funcall predicate x)
-	      (result x)
-	      (fail)))))
+(defmacro smug:let* (bindings &body body)
+  `(drewc.org/smug/library:=let* ,bindings
+     ,@body))
 
 (defun plus (&rest parsers)
   (lambda (input)

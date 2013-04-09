@@ -6,7 +6,8 @@
 	   #:zero
 	   #:plus 
 	   #:item
-	   #:guard)
+	   #:guard
+	   #:or)
  (:export 
   #:result
   #:bind
@@ -28,6 +29,7 @@
   #:is
   #:not
   #:is-not
+  #:or
   #:split 
   #:string
   #:every
@@ -45,11 +47,17 @@
 (defun drewc.org/smug/package:item ()
   (drewc.org/smug/pure:item <parser>))
 
+(defun drewc.org/smug/package:guard (predicate value &rest predicate-args)
+  (apply #'drewc.org/smug/pure:guard <parser> 
+	 predicate value predicate-args))
+
+(defun drewc.org/smug/package:or (parser &rest parsers)
+  (if parsers
+      (maybe parser (apply #'drewc.org/smug/package:or parsers))
+      parser))
+
 
 (defmacro drewc.org/smug/package:let* (bindings 
 				       &body body)
   `(mlet* (<parser> :package :drewc.org/smug/package)
        ,bindings ,@body))
-
-(export 'drewc.org/smug/package:let* 
-	:drewc.org/smug/package)
