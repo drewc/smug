@@ -1,7 +1,7 @@
 #+quicklisp (quote #.(ql:quickload "closer-mop"))
-(defpackage :drewc.org/smug/pure/monad
+(defpackage :smug/pure/monad
   (:use :cl)
-  (:import-from :drewc.org/smug/pure/interface
+  (:import-from :smug/pure/interface
                 #:define-interface
                 #:<interface>
                 #:with-interface)
@@ -17,7 +17,7 @@
     
    #:<monad-zero-plus>
    #:guard))
-(in-package :drewc.org/smug/pure/monad)
+(in-package :smug/pure/monad)
 
 
 (define-interface <monad> (<interface>)
@@ -43,7 +43,7 @@
                 `(funcall 
                   'bind ,monad-interface ,form 
                   (lambda (,var) 
-                    ,@(when (string= var "_")
+                    ,@(when (cl:string= var "_")
                             `((declare (ignorable ,var))))
                     (mlet* ,interface-form ,rest-of-bindings
                       ,@body))))

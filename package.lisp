@@ -1,6 +1,6 @@
- (defpackage :drewc.org/smug/package
+ (defpackage :smug.im/smug/package
   (:nicknames :smug)
-  (:use :drewc.org/smug/pure)
+  (:use :smug.im/smug/pure)
   (:shadow #:result
 	   #:bind
 	   #:zero
@@ -39,25 +39,24 @@
   #:prog2
 ))
  
-(in-package :drewc.org/smug/pure)
+(in-package :smug.im/smug/pure)
 
-(defun drewc.org/smug/package:result (value)
-  (drewc.org/smug/pure:result <parser> value))
+(defun smug.im/smug/package:result (value)
+  (smug.im/smug/pure:result <parser> value))
 
-(defun drewc.org/smug/package:item ()
-  (drewc.org/smug/pure:item <parser>))
+(defun smug.im/smug/package:item ()
+  (smug.im/smug/pure:item <parser>))
 
-(defun drewc.org/smug/package:guard (predicate value &rest predicate-args)
-  (apply #'drewc.org/smug/pure:guard <parser> 
+(defun smug.im/smug/package:guard (predicate value &rest predicate-args)
+  (apply #'smug.im/smug/pure:guard <parser> 
 	 predicate value predicate-args))
 
-(defun drewc.org/smug/package:or (parser &rest parsers)
+(defun smug.im/smug/package:or (parser &rest parsers)
   (if parsers
-      (maybe parser (apply #'drewc.org/smug/package:or parsers))
+      (maybe parser (apply #'smug.im/smug/package:or parsers))
       parser))
 
-
-(defmacro drewc.org/smug/package:let* (bindings 
+(defmacro smug.im/smug/package:let* (bindings 
 				       &body body)
-  `(mlet* (<parser> :package :drewc.org/smug/package)
+  `(mlet* (<parser> :package :smug.im/smug/package)
        ,bindings ,@body))

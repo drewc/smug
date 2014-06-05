@@ -1,254 +1,192 @@
-#+quicklisp (quote #.(ql:quickload "alexandria"))
+(defpackage :smug/parser/org
+  (:use :cl :smug/pure/dot)
+  (:export #:.affiliated-keyword
+           #:.element-block
+           #:.line))
+(in-package :smug/parser/org)
 
-(defpackage :drewc.org/smug/parser/org
-  (:documentation "Org Syntax Parser 
-http://orgmode.org/worg/dev/org-syntax.html")
-  (:import-from :drewc.org/smug/package
-		#:<parser>
-		#:is 
-		#:is-not
-		#:result
-		#:maybe
-		#:guard
-		#:item)
-  (:use :cl)
-  (:export 
-   #:read-org-file
-   #:map-org
-    #:org-file
-    #:org-section
+;; (defvar *org-parameters* (list))
 
-    #:org-src-block
-    #:org-src-block-p
-    #:org-src-block-name
-    #:org-src-block-header-arguments
-))
+;; (defun make-org-parameter (name value &optional documentation)
+;;   (setf *org-parameters* (acons (cons name documentation) value *org-parameters*)))
+
+;; (defun org-parameter (name)
+;;   (cdr (assoc name *org-parameters* :key #'car)))
+
+;; (defun .optional (parser)
+;;   (.maybe parser (.result nil)))
+
+;; (defun .separator ()
+;;   (.or (.is #'char= #\Space) 
+;;        (.progn (.not (.item))
+;;                (.result :end))
+;;        (.progn (.not (.is-not #'char= #\Newline))
+;;                (.result #\Newline))))
+
+;; (defun .make (function &rest plist)
+;;   (if (and function (not plist))
+;;       (.result (funcall function))
+;;       (destructuring-bind (name value . rest) plist
+;;         (.let* ((value value)
+;;                 (rest (if rest 
+;;                           (apply #'.make nil rest)
+;;                           (.result nil))))
+;;           (.result (if function 
+;;                        (apply function name value rest)
+;;                        (list* name value rest)))))))
+
+;; (defun .make-instance (name &rest initargs)
+;;  (apply #'.make (lambda (&rest initargs)
+;;          (apply #'make-instance name initargs))
+;;         initargs))
+
+;; (defclass syntax () ())  
   
-(in-package :drewc.org/smug/parser/org)
+;; (defvar *whitespace* '(#\Space #\Tab)) 
+;; 
+;; (defun .whitespace ()
+;;   (.is 'member *whitespace*))
+;; 
+;; (defclass whitespace (syntax)
+;;   ((whitespace-prefix :initarg :whitespace-prefix
+;;         :accessor whitespace-prefix)
+;;    (whitespace-postfix :initarg :whitespace-postfix
+;;          :accessor whitespace-postfix)))  
 
+;; (defun .line (&optional (nl #\Newline))
+;;   (.prog1 (.coerce (.some (.is-not #'char= nl)) 
+;;                    'cl:string)
+;;           (.is #'char= nl)))
 
+;; (defstruct until 
+;;   contents end)
+;; 
+;; (defun .until (parser &key (do (.item)) contents)
+;;   (.let* ((until (.or parser (.result nil))))
+;;     (if until 
+;;         (.result (cons (reverse contents)
+;;                        until))
+;;         (.let* ((first do))
+;;           (.until parser :do do :contents (list* first contents))))))  
 
-(defun maybep (parser1 &optional (parser2 (result nil)))
-  (maybe parser1 parser2))
+;; 
 
-(defun parser-list (parser &rest parsers)
-  (if parsers
-      (smug:let* ((x parser)
-		  (xs (apply #'parser-list parsers)))
-	(result (cons x xs)))
-      (smug:let* ((x parser))
-	(result (list x)))))
+;; (defclass greater-element (whitespace)
+;;   ((keywords :initarg :keywords 
+;;              :accessor greater-element-keywords)))
+;; 
+;; (defun .greater-element (.parser)
+;;   (.let* ((keys (.some (.keyword))
+;;           (pre (.some (.whitespace)))
+;;           (element .parser))
+;;     (setf (greater-element-keywords element) keys
+;;           (whitespace-prefix element) pre)
+;;     (.result element)))              
 
-(defun EOF () (smug:not (smug:item)))
+;; (defclass greater-block (greater-element)
+;;   ((name :initarg :name
+;;          :accessor greater-block-name)
+;;    (parameters :initarg :parameters
+;;          :accessor greater-block-parameters)
+;;    (contents :initarg :contents
+;;          :accessor greater-block-contents)))
+;; 
+ 
+;; (defvar *greater-block-classes* (list))
+;; 
+;; (defun greater-block-classes ()
+;;   *greater-block-classes*)
+;; 
+;; (defun (setf greater-block-classes) (value)
+;;   (setf *greater-block-classes* value))
+;; 
+;; (defun add-greater-block (name class)
+;;   (push  (cons name class)
+;;          (greater-block-classes)))
+;; 
+;; (defun make-greater-block-instance (name &rest initargs)
+;;   (apply #'make-instance 
+;;     (destructuring-bind (_ . maker)
+;;         (or (assoc name (greater-block-classes) 
+;;                    :test #'string-equal)
+;;             (assoc nil (greater-block-classes)))
+;;       (declare (ignore _))
+;;       maker)            
+;;     initargs))
+;; 
+;; 
+;; 
+;; 
 
-(defun orp (parser &rest parsers)
-  (if parsers
-      (maybe parser (apply #'orp parsers))
-      parser))
+;;      (defun .greater-block ()
+;;        (flet ((.end-block (name)
+;;                 (.progn (.some (.whitespace))
+;;                         (.string-equal 
+;;                          (concatenate 'string
+;; `                                      "#+END_" name)))))
+;;           
+;;          (.let* ((keywords (.some (.keyword)))
+;;                  (_ (.string-equal "#+BEGIN_"))
+;;                  (name 
+;;                   (.coerce 
+;;                    (defun .name () 
+;;                      (.every (.is-not 'member (cons #\Newline *whitespace*)))
+;;                    'cl:string))
+;;                  (parameters
+;;                   (.progn (.whitespace) (.line)))
+;;                  (contents (.until (.end-block name) 
+;;                                    :do (.line))))
+;;            (.result (make-greater-block-instance 
+;;                      name
+;;                      :keywords keywords
+;;                      :name name
+;;                      :parameters parameters
+;;                      :contents (until-contents 
+;;                                 contents))))))
+;;         
 
-(defun string-equalp (string)
-  (smug:string string :item-is #'char-equal))
+;; (defclass special-block (greater-block) ())
+;; (add-greater-block nil 'special-block)  
 
-(defun org-char ()
-  (is-not #'char= #\Newline))
+;; 
 
-(defun org-word ()
-  (smug:let* ((xs (smug:every 
-		   (smug:progn (smug:not (is #'char= #\space))
-			       (org-char)))))
-    (result (coerce xs 'cl:string))))
+;; 
 
-(defun characters (&key (org-char (org-char)))
-  (smug:some org-char))
+;; (defclass source-block (block)
+;;   ((language :initarg :language 
+;;              :accessor source-block-language)
+;;    (switches :initarg :switches 
+;;              :accessor source-block-switches)
+;;    (arguments :initarg :arguments 
+;;               :accessor source-block-arguments)))     
+;; 
+;; (add-block "SRC" 'source-block) 
 
-(defun line (&key (characters (characters))
-	       (eol (is #'char= #\Newline)))
-  (smug:let* ((line (smug:prog1 characters			
-		      eol)))
-    (result (coerce line 'cl:string))))
+;; (defmethod initialize-instance :after ((source-block source-block)
+;;                                        &rest initargs)
+;;   (declare (ignore initargs))
+;;   (.run 
+;;      (.let* ((language (.language))
+;;              (_ (.optional (.is 'eql #\Space)))
+;;              (switches (.switches))
+;;              (_ (.optional (.is 'eql #\Space)))
+;;              (arguments (.arguments)))
+;;        (with-accessors ((l source-block-language)
+;;                         (s source-block-switches)
+;;                         (a source-block-arguments)) 
+;;            source-block
+;;          (.result (setf l language
+;;                         s switches
+;;                         a arguments))))
+;;      (block-data source-block)))
 
-(defstruct (org-heading (:type list))
-  stars
-  text)
-
-(defun org-heading (&key (level 0))
-  (smug:let* 
-      ((stars (smug:prog1 (smug:every (is #'char= #\*))
-		(is #'char= #\Space)))
-       (text (smug:progn (guard #'> (length stars)
-			   level) 
-		    (line))))
-    (result (make-org-heading
-	     :stars stars
-	     :text text))))
-
-
-(defstruct org-src-block 
-  (name nil)
-  begin
-  (language nil) 
-  (switches nil)
-  (header-arguments nil)
-  contents
-  end)
-
-(defun org-src-block-name-heading ()
-  (smug:let* ()
-    (smug:progn (smug:string "#+name: " :item-is #'char-equal)
-		(line))))
-
-(defun org-src-block-switch ()
-  (is #'char= #\-))
-
-(defun org-src-block-header-argument-name ()
-  (smug:prog2 (is #'char= #\:)
-      (org-word)
-    (is #'char= #\Space)))
-
-(defun |org-src-block-header-argument (name . value)| ()
-  (smug:let* ((name (org-src-block-header-argument-name))
-	      (value (smug:some 
-		      (smug:prog2 (smug:not (org-src-block-header-argument-name))
-			  (org-word)
-			(maybe (is #'char= #\Space)
-			       (result nil))))))
-    (result (cons name value))))
-
-(defun org-src-block-header-arguments-as-alist ()
-  (smug:some (|org-src-block-header-argument (name . value)|)))
-
-(defstruct org-noweb-reference
-  start 
-  name
-  end)
-
-(defun org-noweb-reference ()
-  (let ((end (parser-list (is #'char= #\>)
-			  (is #'char= #\>))))
-    (smug:let* ((start (parser-list (is #'char= #\<)
-				    (is #'char= #\<)))
-		(name (smug:every (smug:progn (smug:not end)
-					      (org-char))))
-		(end end))
-      (result (make-org-noweb-reference 
-	       :start start
-	       :name (coerce name 'cl:string)
-	       :end end)))))
-
-(defun org-noweb-line ()
-  (smug:let* 
-      ((chars-or-refs (smug:prog1 
-			  (smug:some
-			   (maybe 
-			    (org-noweb-reference)
-			    (org-char)))
-			(is #'char= #\Newline))))
-    (let ((line (loop for cr in chars-or-refs
-		   :if (characterp cr)
-		   :collect cr :into chars
-		   :else 
-		   :nconc (prog1 (list (coerce chars 'cl:string)
-				       cr)
-			    (setf chars nil))
-		   :into line		   		     
-		   :finally (return (nconc line (list (coerce chars 'cl:string)))))))        
-      (result (if (second line) line (first line))))))
-
-(defun org-src-block-lines (&key end noweb)
-   (smug:let* ((line (smug:progn 
-		      (smug:not end)
-		      (if noweb (org-noweb-line) (line))))
-	       (lines (maybe (org-src-block-lines 
-			      :end end
-			      :noweb noweb)
-			     (result nil))))
-     (result (cons line lines))))
-
-(defun org-src-block (&key 
-			(begin (string-equalp "#+begin_src "))
-			(end (string-equalp "#+end_src")))
-  (smug:let* ((name (smug:maybe (org-src-block-name-heading)
-				  (result nil)))
-	      (begin begin)
-	      (language (maybe (org-word)
-			       (result nil)))
-	      (_ (maybe (is #'char= #\space)
-			(result nil)))
-	      
-	      (header-arguments 
-	       (maybep
-		(smug:let* ((alist (org-src-block-header-arguments-as-alist))
-			    (rest (line)))
-		  (result (if (and rest
-				   (not (string= "" rest)))
-			      
-			      (list* `("rest of line" ,rest) alist)
-			      alist)))
-		(line)))
-	      (contents (org-src-block-lines 
-			 :end end
-			 :noweb (assoc "noweb" header-arguments
-				       :test #'string-equal)))
-	      (end end))
-      (result (make-org-src-block 
-	       :name name
-	       :begin begin
-	       :language language 
-	       :switches 'switches
-	       :header-arguments header-arguments
-	       :contents contents  
-	       :end end))))
-
-(defstruct org-section
-  (heading NIL)
-  (contents NIL))
-
-(defun org-section (&key (level 0))
-  (smug:progn 
-    (smug:not (EOF))
-    (smug:let* ((heading (if (zerop level)
-			     (maybe (org-heading :level level)
-				    (progn  (result (make-org-section))))
-			     (org-heading :level level)))
-		(contents  (smug:some 
-			    (orp
-			     (org-src-block)
-			     (org-section :level (1+ level))
-			     (smug:progn 
-			       (smug:not (org-heading))
-			       (line))))))
-      (result (make-org-section 
-	       :heading heading
-	       :contents contents)))))
-
-(defun map-org (function org-*)
-  (cond ((org-section-p org-*) 
-	 (funcall function org-*)
-	 (dolist (c (org-section-contents org-*))
-	   (map-org function c)))
-	((org-file-p org-*) 
-	 (funcall function org-*)
-	 (dolist (c (org-file-contents org-*))
-	   (map-org function c)))
-	((listp org-*)
-	 (dolist (object org-*)
-	   (map-org function object)))
-	(t (funcall function org-*))))
-
-(defstruct org-file 
-  pathname
-  contents)
-
-(defun org-file ()
-  (smug:let* ((contents (smug:every (org-section))))
-    (result (make-org-file 
-	     :contents contents))))
-
-(defun read-org-file (pathname)
-  (let ((org-file 
-	  (smug:run 
-	   (org-file)
-	   (alexandria:read-file-into-string  
-	    pathname))))
-    (prog1 org-file
-      (setf (org-file-pathname org-file) pathname))))
+;; (defparameter |*TEST-STRING:headline*|
+;;   (subseq "
+;; * 
+;; 
+;; ** DONE
+;; 
+;; *** Some e-mail
+;; 
+;; **** TODO [#A] COMMENT Title :tag:a2%: "
+;;          1))

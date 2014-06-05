@@ -1,10 +1,9 @@
-
-(defpackage :drewc.org/smug/pure
-  (:use :cl)
-  (:import-from :drewc.org/smug/pure/interface
+(defpackage :smug/pure
+    (:use :cl)
+  (:import-from :smug/pure/interface
                  #:define-interface
                  #:<interface>)
-  (:import-from :drewc.org/smug/pure/monad  
+  (:import-from :smug/pure/monad  
                 #:<monad>
                 #:result
                 #:bind
@@ -24,7 +23,10 @@
            #:prog2
            #:every
            #:some
-           #:string)
+           #:string
+           #:string=
+           #:string-equal
+           #:coerce)
   (:export 
    
    #:<monad>
@@ -42,7 +44,7 @@
                  
    #:<parser>     
    #:item    
-
+   #:input
    #:run
     
    ;; Parser Library
@@ -54,29 +56,30 @@
 ;;; Shadows CL
    #:not
    #:string
+   #:string=
+   #:string-equal
+   #:coerce
    #:first
-   #:not
    #:satisfies 
    #:every
    #:some
    #:progn
    #:prog1
-   #:prog2
-   ))
+   #:prog2))
   
-(in-package :drewc.org/smug/pure)
-  
-    
+(in-package :smug/pure)
+        
 (define-interface <parser> (<monad-zero-plus>) 
   ()
   (:singleton)
-  (:generic item (<parser>)))
+  (:generic item (<parser>))
+  (:generic input (<parser>)))
 
 (defgeneric item-input (<parser> input)
   (:method ((<p> <parser>) (input cl:null))
     input)
   (:method ((<p> <parser>) (input cl:string))
-    (unless (string= input "")
+    (unless (cl:string= input "")
       (list 
        (cons (aref input 0) 
              (multiple-value-bind (array displaced-index-offset) 
@@ -91,6 +94,10 @@
 (defmethod item ((<p> <parser>))
   (lambda (input)
     (item-input <p> input)))
+
+(defmethod input ((<p> <parser>))
+  (lambda (input)
+    (funcall (result <p> input) input)))
   
 (defmethod result ((<p> <parser>) value)
   (lambda (input) (list (cons value input))))
@@ -107,8 +114,7 @@
 (defmethod plus ((<p> <parser>) parser qarser)
   (lambda (input)
     (append (funcall parser input) (funcall qarser input))))
- 
- 
+  
 (defun satisfies (predicate &rest args)
   (mlet* <parser> ((x (item)))
     (apply #'guard predicate x args)))  
@@ -120,14 +126,21 @@
  
 (defun maybe (parser1 parser2)
   (first (plus <parser> parser1 parser2)))
- 
+
+(defun many (parser)
+    (mlet* <parser> ()
+      (plus (mlet* <parser> 
+                ((x parser)
+                 (xs (many parser)))
+              (result (cons x xs)))
+            (result nil))))
+
 (defun run (parser input)
   (let ((result (funcall parser input)))
     (values (car (cl:first result)) 
             (cdr (cl:first result))
             (rest result))))
-  
- 
+     
 (defun is (predicate &rest args)
   (apply #'satisfies predicate args))
   
@@ -143,7 +156,7 @@
 (defun string (string &rest args 
                &key (item-is #'char=)
                  (coerce 'cl:string))
-  (if (string= string "")
+  (if (cl:string= string "")
       (result <parser> nil)
       (mlet* <parser> 
           ((first (is item-is (aref string 0)))
@@ -151,9 +164,18 @@
                         :coerce nil
                         args)))
         (let ((list (cons first rest)))
-          (result (if coerce (coerce list coerce) list))))))
+          (result (if coerce (cl:coerce list coerce) list))))))
 
-     
+(defun string= (string)
+  (string string))
+
+(defun string-equal (string)
+  (string string :item-is #'char-equal))
+
+(defun coerce (parser type)
+  (mlet* <parser> ((p parser))
+    (result (cl:coerce p type))))
+       
 (defun some (parser)
   (mlet* <parser> ()
     (maybe (mlet* <parser> 

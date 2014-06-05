@@ -1,45 +1,50 @@
 #+quicklisp (quote #.(ql:quickload "closer-mop"))
-(defpackage :drewc.org/smug/pure/interface
+(defpackage :smug/pure/interface
     (:use :cl)
     (:export  #:<interface> 
               #:define-interface
               #:with-interface))
     
-(in-package :drewc.org/smug/pure/interface)
+(in-package :smug/pure/interface)
 
-(defgeneric expand-interface-option (<interface> option-name &rest option-args)
-  (:method (<interface> option-name &rest option-args)
-    (declare (ignore option-args)) nil)
-  (:method (interface-name (option-name (eql :singleton)) &rest option-args)
-  (declare (ignore option-args))
-  `(defvar ,interface-name
-     (make-instance ',interface-name)))
-  (:method (<interface> (option-name (eql :generic)) &rest option-args)
-    (destructuring-bind (n args . rest) option-args
-      `(defgeneric ,n ,args ,@rest))))
-
-(defgeneric check-interface-option (<interface> 
-                                    option-name &rest option-args)
-  (:method (<interface> option-name &rest option-args)
-    (declare (ignore <interface> option-name option-args)) 
-    t)
-  (:method (<interface> 
-            (option-name (eql :generic)) &rest option-args)
-     (c2mop:compute-applicable-methods-using-classes 
-             (fdefinition (first option-args))
-             (list (class-of <interface>)))))
-
-(defgeneric interface-options (<interface>)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defgeneric interface-options (<interface>)
    (:method-combination append))
 
-(defmacro define-interface (name direct-superinterfaces direct-slots
-                            &rest options)
-  `(cl:progn  
-     (defclass ,name ,direct-superinterfaces ,direct-slots)
-     ,@(loop :for (oname . args)  :in options
-          :collect (apply #'expand-interface-option name oname args))
-     (defmethod interface-options append ((<i> ,name))
-                '(,@options))))
+  (defgeneric expand-interface-option (<interface> option-name 
+                                       &rest
+                                         option-args)
+    (:method (<interface> option-name &rest option-args)
+      (declare (ignore option-args)) nil)
+    (:method (interface-name (option-name (eql :singleton)) &rest option-args)
+      (declare (ignore option-args))
+      `(defvar ,interface-name
+         (make-instance ',interface-name)))
+    (:method (<interface> (option-name (eql :generic)) &rest option-args)
+      (destructuring-bind (n args . rest) option-args
+        `(defgeneric ,n ,args ,@rest))))
+
+  (defgeneric check-interface-option (<interface> 
+                                      option-name &rest option-args)
+    (:method (<interface> option-name &rest option-args)
+      (declare (ignore <interface> option-name option-args)) 
+      t)
+    (:method (<interface>
+              (option-name (eql :generic)) 
+              &rest option-args)
+      (c2mop:compute-applicable-methods-using-classes 
+       (fdefinition (first option-args))
+       (list (class-of <interface>)))))
+
+
+  (defmacro define-interface (name direct-superinterfaces direct-slots
+                              &rest options)
+    `(cl:eval-when (:compile-toplevel :load-toplevel :execute)
+       (defclass ,name ,direct-superinterfaces ,direct-slots)
+       ,@(loop :for (oname . args)  :in options
+            :collect (apply #'expand-interface-option name oname args))
+       (defmethod interface-options append ((<i> ,name))
+                  '(,@options)))))
 
 (define-interface <interface> ()
   ())

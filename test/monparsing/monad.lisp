@@ -1,47 +1,52 @@
 
-(defpackage :drewc.org/smug/test/monparsing/monad
+(defpackage :smug/test/monparsing/monad
  (:use :cl)
  (:shadow #:satisfies
           #:char
           #:string))
 
-(in-package :drewc.org/smug/test/monparsing/monad)
+(in-package :smug/test/monparsing/monad)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
 
-(defgeneric expand-interface-option (<interface> option-name &rest option-args)
-  (:method (<interface> option-name &rest option-args)
-    (declare (ignore option-args)) nil)
-  (:method (interface-name (option-name (eql :singleton)) &rest option-args)
-  (declare (ignore option-args))
-  `(defvar ,interface-name
-     (make-instance ',interface-name)))
-  (:method (<interface> (option-name (eql :generic)) &rest option-args)
-    (destructuring-bind (n args . rest) option-args
-      `(defgeneric ,n ,args ,@rest))))
-
-(defgeneric check-interface-option (<interface> 
-                                    option-name &rest option-args)
-  (:method (<interface> option-name &rest option-args)
-    (declare (ignore <interface> option-name option-args)) 
-    t)
-  (:method (<interface> 
-            (option-name (eql :generic)) &rest option-args)
-     (c2mop:compute-applicable-methods-using-classes 
-             (fdefinition (first option-args))
-             (list (class-of <interface>)))))
-
-(defgeneric interface-options (<interface>)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defgeneric interface-options (<interface>)
    (:method-combination append))
 
-(defmacro define-interface (name direct-superinterfaces direct-slots
-                            &rest options)
-  `(cl:progn  
-     (defclass ,name ,direct-superinterfaces ,direct-slots)
-     ,@(loop :for (oname . args)  :in options
-          :collect (apply #'expand-interface-option name oname args))
-     (defmethod interface-options append ((<i> ,name))
-                '(,@options))))
+  (defgeneric expand-interface-option (<interface> option-name 
+                                       &rest
+                                         option-args)
+    (:method (<interface> option-name &rest option-args)
+      (declare (ignore option-args)) nil)
+    (:method (interface-name (option-name (eql :singleton)) &rest option-args)
+      (declare (ignore option-args))
+      `(defvar ,interface-name
+         (make-instance ',interface-name)))
+    (:method (<interface> (option-name (eql :generic)) &rest option-args)
+      (destructuring-bind (n args . rest) option-args
+        `(defgeneric ,n ,args ,@rest))))
+
+  (defgeneric check-interface-option (<interface> 
+                                      option-name &rest option-args)
+    (:method (<interface> option-name &rest option-args)
+      (declare (ignore <interface> option-name option-args)) 
+      t)
+    (:method (<interface>
+              (option-name (eql :generic)) 
+              &rest option-args)
+      (c2mop:compute-applicable-methods-using-classes 
+       (fdefinition (first option-args))
+       (list (class-of <interface>)))))
+
+
+  (defmacro define-interface (name direct-superinterfaces direct-slots
+                              &rest options)
+    `(cl:eval-when (:compile-toplevel :load-toplevel :execute)
+       (defclass ,name ,direct-superinterfaces ,direct-slots)
+       ,@(loop :for (oname . args)  :in options
+            :collect (apply #'expand-interface-option name oname args))
+       (defmethod interface-options append ((<i> ,name))
+                  '(,@options)))))
 
 (define-interface <interface> ()
   ())
@@ -122,54 +127,14 @@
                      predicate value
                      &rest predicate-args)))
 
-(defmethod guard ((<m> <monad-zero-plus>) 
-                    predicate value
-                    &rest predicate-args)
-    (if (apply predicate value predicate-args)
-        (result <m> value)
-        (zero <m>)))
 
 
-(define-interface <parser> (<monad-zero-plus>) 
-  ()
-  (:singleton)
-  (:generic item (<parser>)))
 
-(defgeneric item-input (<parser> input)
-  (:method ((<p> <parser>) (input cl:null))
-    input)
-  (:method ((<p> <parser>) (input cl:string))
-    (unless (string= input "")
-      (list 
-       (cons (aref input 0) 
-             (multiple-value-bind (array displaced-index-offset) 
-                 (array-displacement input) 
-               (let ((string (or array input))
-                     (index (if array (1+ displaced-index-offset) 1)))
-                 (make-array (1- (length input))
-                             :displaced-to string
-                             :displaced-index-offset index
-                             :element-type (array-element-type string)))))))))
 
-(defmethod item ((<p> <parser>))
-  (lambda (input)
-    (item-input <p> input)))
 
-(defmethod result ((<p> <parser>) value)
-  (lambda (input) (list (cons value input))))
 
-(defmethod bind ((<p> <parser>) parser function)
-  (lambda (input)
-    (loop :for (value . input) 
-       :in (funcall parser input)
-       :append (funcall (funcall function value) input))))
 
-(defmethod zero ((<p> <parser>))
-   (constantly NIL))
 
-(defmethod plus ((<p> <parser>) parser qarser)
-  (lambda (input)
-    (append (funcall parser input) (funcall qarser input))))
 
 
 (defmacro mlet* (monad bindings &body body)
@@ -189,16 +154,14 @@
                 `(funcall 
                   'bind ,monad-interface ,form 
                   (lambda (,var) 
-                    ,@(when (string= var "_")
+                    ,@(when (cl:string= var "_")
                             `((declare (ignorable ,var))))
                     (mlet* ,interface-form ,rest-of-bindings
                       ,@body))))
               `(cl:progn ,@body))))))
 
 
-(defun satisfies (predicate &rest args)
-  (mlet* <parser> ((x (item)))
-    (apply #'guard predicate x args)))       
+     
 
 (mlet* <parser> ()
   
@@ -239,36 +202,14 @@
   (defun alphanum () (plus (letter) (digit)))
 ))
 
-(defun string (string)
-   (if (string= string "")
-       (result <parser> nil)
-       (mlet* <parser> 
-         ((_ (char (aref string 0)))
-          (_ (string (subseq string 1))))
-        (result string))))
-(assert (equal '(("hello" . " there"))
-               (funcall (string "hello") 
-                        "hello there")))
 
-(assert (cl:null (funcall (string "hello") 
-                          "helicopter")))
 
-(defun many (parser)
-    (mlet* <parser> ()
-      (plus (mlet* <parser> 
-                ((x parser)
-                 (xs (many parser)))
-              (result (cons x xs)))
-            (result nil))))
 
-(defun many1 (parser)
-  (mlet* <parser>
-      ((x parser)
-       (xs (many parser)))
-    (result (cons x xs))))
 
-(defun word ()
-  (many (letter)))
+
+
+
+
 
 
 (assert (equal (funcall (word) "Yes!")
@@ -290,28 +231,10 @@
                (funcall (many1 (char #\a)) "aaab")))  
 
 
-(defun nat () 
-  (mlet* <parser>
-   ((xs (many1 (digit))))
-  (result (read-from-string (coerce xs 'cl:string)))))
 
-#+end_sr
 
-#+name: test lisp <parser> nat
-#+begin_src lisp
-  (assert (equal '((124 . "") (12 . "4") (1 . "24")) 
-                 (funcall (nat) "124")))  
 
-(assert (equal '((124 . "") (12 . "4") (1 . "24")) 
-               (funcall (nat) "124")))  
 
-(defun int ()
- (mlet* <parser> ()
-   (plus (mlet* <parser>
-             ((_ (char #\-))
-              (n (nat)))
-           (result (- n)))
-         (nat))))  
 
 (assert (and (equal (funcall (int) "12345")
                     '((12345 . "") (1234 . "5") (123 . "45") 
@@ -322,13 +245,7 @@
              (cl:null (funcall (int) "#-12345"))))
 
 
-(defun int ()
-  (mlet* <parser> 
-      ((op (plus (mlet* <parser> ((_ (char #\-)))
-                   (result #'-))
-                 (result #'identity)))           
-       (n (nat)))
-    (result (funcall op n))))
+
 
 (assert (and (equal (funcall (int) "12345")
                     '((12345 . "") (1234 . "5") (123 . "45") 
@@ -339,46 +256,16 @@
              (cl:null (funcall (int) "#-12345"))))
 
 
-(defun ints () 
-  (mlet* <parser> 
-      ((_ (char #\[))
-       (n (int))
-       (ns (many (mlet* <parser>
-                     ((_ (char #\,))
-                      (x (int)))
-                   (result x))))
-       (_ (char #\])))
-    (result (cons n ns))))    
+<<ints first lisp <parser> >>
  
-(assert (equal (funcall (ints) "[1,234,567]")
-               '(((1 234 567) . ""))))
+<<ints test lisp <parser> >>
 
-(defun sepby1 (parser sep)
-  (mlet* <parser>
-     ((x parser)
-      (xs (many (mlet* <parser> 
-                 ((_ sep) 
-                  (y parser))
-                 (result y)))))
-     (result (cons x xs))))
+<<sepby1 lisp <parser> >>
  
-(defun ints ()
-  (mlet* <parser> 
-      ((_ (char #\[))
-       (ns (sepby1 (int) (char #\,)))
-       (_ (char #\])))
-    (result ns)))
 
 
-(assert (equal (funcall (ints) "[1,234,567]")
-               '(((1 234 567) . ""))))
+<<ints test lisp <parser> >>
 
-(defun bracket (open-parser parser close-parser)
-  (mlet* <parser>
-      ((_ open-parser)
-       (x parser)
-       (_ close-parser))
-    (result x)))
+<< bracket lisp <parser> >>
 
-(defun ints () 
-  (bracket (char #\[) (sepby1 (int) (char #\,)) (char #\])))
+<< third ints lisp <parser> >>
