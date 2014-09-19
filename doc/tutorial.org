@@ -549,7 +549,6 @@ order to save a bundle in the future.
 
 #+RESULTS:
 : \.FIRST
-
    
 * Syntax : =LET*= and the identity monad
 
@@ -941,12 +940,12 @@ this tutorial. The source code itself is stored in Code Blocks.
 Live code blocks can be specified with a `src' block or inline.  The
 structure of a `src' block is
 
-     #+BEGIN_SRC org
+     ,#+BEGIN_SRC org
        ,#+NAME: <name>
        ,#+BEGIN_SRC <language> <switches> <header arguments>
          <body>
        ,#+END_SRC     
-     #+END_SRC
+     ,#+END_SRC
 
 The `#+NAME:' line is optional, and can be used to name the code
 block.  Live code blocks require that a language be specified on
@@ -1196,6 +1195,8 @@ use a -l switch to change the format, for example
 
   <<tutorial_.is>>
 
+  <<tutorial_.map>>
+
   <<tutorial_char=digit-char|lower-case-p>>
   
   <<tutorial_.coerce>>
@@ -1205,6 +1206,7 @@ use a -l switch to change the format, for example
   <<tutorial_.char-equal>>
 
   <<tutorial_.string-equal>>
+ 
 
   <<tutorial-org_.line>>
 
@@ -1314,6 +1316,7 @@ Nottingham, 1996.
 [4] Literate Programming
 
 [fn:f_chareq] http://clhs.lisp.se/Body/f_chareq.htm
+
 
 
 
