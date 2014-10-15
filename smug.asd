@@ -11,6 +11,4 @@ Using a simple technique from the functional programming camp, smug
 makes it simple to create quick extensible recursive descent parsers
 without funky syntax or impenetrable macrology."
   :class :package-system
-  :defsystem-depends-on (:asdf-package-system)
-  :depends-on (:lil/interface/monad
-	       :smug/parser/org))
+  :defsystem-depends-on (:asdf-package-system))
