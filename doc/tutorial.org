@@ -1,19 +1,16 @@
 #+TITLE: SMUG Tutorial : Literate
 
-  This tutorial is essentially a translation of Monadic Parser
-  Combinators[1], or at least the first half, into common
-  lisp. Discussion of static types and the details of monads are
-  omitted as we're simply concerned with parsing.  
+  This tutorial started as a translation of _Monadic Parser
+  Combinators_ [1], or at least the first half, into common lisp.
 
   The example code in the following document is completely
-  self-contained, and does not require an installation of the =SMUG=
+  self-contained, and does not require an installation of the ~SMUG~
   library.
 
   No prior experience with functional programming, monads or recursive
-  descent parsing is assumed. The only requirements are an ANSI
-  common lisp environment, and a burning desire to find a better way
-  to parse.
-
+  descent parsing is assumed. The only requirements are a common lisp
+  environment, and a burning desire to find a better way to parse.
+  
 * Introduction 
 
  This tutorial, like this library, is based on an approach to
@@ -29,40 +26,21 @@
 
 ** Common Lisp
 
- In some cases, the natural name for a parser conflicts with a name
- in the =COMMON-LISP= package. Rather then shadow the symbols, i've
- chosen to prefix names with a #\. character. It is thought that this
- aids usability, as one can simply (:use :smug/tutorial). It also
- helps to distiguish parser returning/running functions from other
+ In some cases, the natural name for a parser conflicts with a name in
+ the ~COMMON-LISP~ package. Rather then shadow the symbols, I've
+ chosen to prefix all parser names with a #\. character. It is thought that
+ this aids usability, as one can simply ~(:use :smug/tutorial)~. It also
+ helps to distinguish parser returning functions from other
  functions.
-
-*** Testing
-
-#+BEGIN_SRC lisp
-  (defmacro test> (form &key ((=> provided-result) nil result-provided?)
-                          (test 'equal))
-    `(let* ((form-result ,form)
-            (result (if ',result-provided?
-                        (funcall ',test form-result ',provided-result)
-                        form-result)))
-       (prog1 result (assert result
-                             () "~A~% => ~A ~%  ...should be :~%    ~A"
-                             ',form form-result ',(if result-provided? 
-                                                      provided-result
-                                                      "Something that evaluates to a non-NIL value")))))
-#+END_SRC
-
-#+RESULTS:
-: TEST>
 
 * How To Combine Parsers
 
 #+BEGIN_QUOTE 
    A Parser for Things
-   is a functions from Strings
+   is a function from Strings
    to Lists of Pairs
    of Things and Strings!
-   --- Fritz Ruehr, Willamette University [2]
+   -- Fritz Ruehr, Willamette University [2]
 #+END_QUOTE 
 
    A parser is something that is familiar to all programmers... a
@@ -71,17 +49,16 @@
    some way. Or, to put it simply, a function from strings to things.
    
 #+BEGIN_SRC lisp
-   ;; our fictional parser matches the string "string" 
-   ;; and returns a SYMBOL thing  
-
+  ;; our fictional parser matches the string "string" 
+  ;; and returns a SYMBOL thing    
   (parse-thing "string") => THING
 #+END_SRC
    
    In order to combine simple parsers into larger more complex ones,
    they need a way to communicate between them. First, because any
    given parser might consume only a part of the input, we'll have our
-   parser return a =CONS= with the result in the =CAR= and the remaining
-   input in the =CDR=.
+   parser return a ~CONS~ with the result in the ~CAR~ and the remaining
+   input in the ~CDR~.
 
    #+BEGIN_SRC lisp
      (parse-thing "string string") => (THING . " string")
@@ -89,7 +66,7 @@
 
    Because a parser may return multiple results when the
    grammar is ambiguous, or may return no results all, we'll put our
-   conses in a list, and have the empty list, =NIL=, denote a failed
+   conses in a list, and have the empty list, ~NIL~, denote a failed
    parse.
 
    #+BEGIN_SRC lisp
@@ -97,8 +74,8 @@
      (parse-thing "strong string") ;=> NIL
   #+END_SRC
 
-  So, for our purposes, a parser is just a =FUNCTION= that takes a
-  single value as the input and returns a =LIST= of =CONS='s of results
+  So, for our purposes, a parser is just a ~FUNCTION~ that takes a
+  single value as the input and returns a ~LIST~ of ~CONS~'s of results
   and unconsumed input.
   
   It is this trivial protocol that allows us to combine small simple
@@ -109,11 +86,10 @@
   Smug parsers allow infinite look-ahead and backtracking. To support
   parsing many different things, it's useful to define an input
   protocol. Smug parsers only require three operations on input :
-  =INPUT-FIRST=, =INPUT-REST= and =INPUT-EMPTY-P=.  
+  ~INPUT-FIRST~, ~INPUT-REST~ and ~INPUT-EMPTY-P~.  
 
-  We'll define them in terms of strings. This is not a particularly
-  efficient implementation, but it serves our purposes and makes for
-  a nice visual presentation.
+  We'll define them in terms of strings. It serves our purposes and
+  makes for a nice visual presentation.
 
   #+NAME: tutorial_reading-input
   #+BEGIN_SRC lisp
@@ -125,31 +101,35 @@
     
     (defgeneric input-rest (input)
       (:method ((input string))
-	(make-array (1- (length input))
-		    :displaced-to input
-		    :displaced-index-offset 1
-		    :element-type (array-element-type input))))
+        (multiple-value-bind (string displacement) 
+            (array-displacement input)      
+          (make-array (1- (length input))
+                      :displaced-to (or string input)
+                      :displaced-index-offset (1+ displacement)
+                      :element-type (array-element-type input)))))
+  #+END_SRC
+  
+  
+  #+BEGIN_SRC lisp
+    (input-empty-p "") => t
+    (input-empty-p "foo")
+    (input-first "foo") => #\f
+    (input-rest "foo") => "oo"
   #+END_SRC
 
-  #+BEGIN_SRC lisp
-    (test> (input-empty-p "") => t)
-    (test> (input-empty-p "foo") => nil)
-    (test> (input-first "foo") => #\f)
-    (test> (input-rest "foo") => "oo")
-  #+END_SRC
 
 * The Three Primitive Parsers
 
   There are 3 simple primitive parsers. It it only necessary to
-  understand them, and one sequencing combinator, =.BIND=, to understand
-  all of =SMUG/TUTORIAL=.
+  understand them, and one sequencing combinator, ~.BIND~, to understand
+  all of ~SMUG/TUTORIAL~.
 
-** =.RESULT=
+** ~.RESULT~
 
-    The first parser is =.RESULT=, which always succeeds by returning the
+    The first parser is ~.RESULT~, which always succeeds by returning the
     value passed to it,  and does not consume any input. Because we've
     earlier defined parsers as functions that take a single argument
-    we'll make a curry with the input parameter.
+    we'll make a curry[5] with the input parameter.
 
 #+NAME: tutorial_.result
 #+BEGIN_SRC lisp
@@ -164,12 +144,12 @@
          => ((:foo . "bar baz")))
 #+END_SRC
 
-** =.FAIL= 
+** ~.FAIL~ 
 
-    The second parser, =.FAIL=, is the inverse behaviour of
-    =.RESULT=. It simply fails regardless of the input. we could
-    define =.FAIL= as a function that takes a single argument, but then
-    we'd have to access it using =FUNCTION= (#'), and aesthetically that
+    The second parser, ~.FAIL~, is the inverse behaviour of
+    ~.RESULT~. It simply fails regardless of the input. we could
+    define ~.FAIL~ as a function that takes a single argument, but then
+    we'd have to access it using ~FUNCTION~ (#'), and aesthetically that
     inconsistency is undesirable, so we'll again make curry with the
     input parameter.
 
@@ -184,9 +164,9 @@
 (test> (funcall (.fail) "foo") => NIL)
 #+END_SRC
 
-** =.ITEM=
+** ~.ITEM~
 
-    The last true primitive is .=.ITEM=, which is a parser that
+    The last true primitive is .~.ITEM~, which is a parser that
     consumes the first token in the input, or fails in the input is
     empty.
 
@@ -208,43 +188,61 @@
          => NIL)
 #+END_SRC
 
-* =.RUN=: =FUNCALL= in disguise
+* ~RUN~, ~PARSE~: ~FUNCALL~ and ~CAAR~ in disguise
 
-All the primatives return a =FUNCTION= that must be =FUNCALL='ed with =INPUT= in
+All the primitives return a ~FUNCTION~ that must be ~FUNCALL~'ed with ~INPUT~ in
 order to run the parser. 
 
-There are many reasons to define a =.RUN= function. We can =CL:TRACE=
-it, or change the input parameter =TYPE=, or change what the actual
-primatives return.
+There are many reasons to define a ~RUN~ function. We can ~CL:TRACE~
+it, or change the input parameter ~TYPE~, or change what the actual
+primitives return.
 
-#+NAME: tutorial_.run
+#+NAME: tutorial_run
 #+BEGIN_SRC lisp
-  (defun .run (parser input)
+  (defun run (parser input)
     (funcall parser input))
 #+END_SRC
 
-* =.BIND=: Our first primative combinator
+The ~RUN~ function returns the entire parse tree. Most of the time we
+simply want the ~CAR~ of the ~FIRST~ result. The ~CDR~ is the leftover
+input, and the ~REST~ of the result alternative outcomes. We might
+want these as well, so we return the as ~VALUES~.
+
+#+NAME: tutorial_run
+#+BEGIN_SRC lisp 
+  (defun parse (parser input)
+    (let ((result (run parser input)))
+      (when result 
+        (destructuring-bind ((result . input) &rest rest)
+            result      
+          (apply #'values result input rest)))))
+#+END_SRC
+
+#+RESULTS: tutorial_run
+: PARSE
+
+* ~.BIND~: Our first primitive combinator
 
    Now that we have our primitive parsers, we need a way to combine
    them. We'd like to be able to apply parsers in sequence, and it
    would also come in handy if we could give names to the intermediate
    results of parsers. Both these requirements are fulfilled by using
-   the monadic sequencing operator, =.BIND=.
+   the monadic sequencing operator, ~.BIND~.
 
-   =.BIND= is a function that takes as arguments a parser P, and a
-   function F which take a value and returns a parser P2. =.BIND= returns
+   ~.BIND~ is a function that takes as arguments a parser P, and a
+   function F which take a value and returns a parser P2. ~.BIND~ returns
    a parser that first applies P to the input, returning a list of
-   =(VALUE . INPUT)= pairs. The the function =F= is applied to each =VALUE=,
-   and the result =P2= then applied to the =INPUT=. The collected lists of
-   pairs returned from the =P2='s are then concatenated and the result
+   ~(VALUE . INPUT)~ pairs. The the function ~F~ is applied to each ~VALUE~,
+   and the result ~P2~ then applied to the ~INPUT~. The collected lists of
+   pairs returned from the ~P2~'s are then concatenated and the result
    returned.
 
 #+NAME: tutorial_.bind
 #+BEGIN_SRC lisp
   (defun .bind (parser function)
     (lambda (input)
-      (loop :for (value . input) :in (.run parser input)
-            :append (.run (funcall function value) input))))
+      (loop :for (value . input) :in (run parser input)
+            :append (run (funcall function value) input))))
 #+END_SRC
 
 #+NAME: tutorial-test_.bind
@@ -253,14 +251,14 @@ primatives return.
          (.bind (.item) 
                (lambda (char) 
                  (.result (list :char char))))))           
-    (.run char-token "foo"))
-  ;; => (((:CHAR #\f) . "oo"))
+    (run char-token "foo"))
+  ;; ~> (((:CHAR #\f) . "oo"))
 #+END_SRC
 
-   Because =.BIND= itself returns a parser, the result of a =.BIND= can be
+   Because ~.BIND~ itself returns a parser, the result of a ~.BIND~ can be
    returned as P2. This allows parsers to be chained, and allows us to
-   use =LAMBDA= to provide names for the values of parser results. For
-   example, the following parser uses =.BIND= to return the first two
+   use ~LAMBDA~ to provide names for the values of parser results. For
+   example, the following parser uses ~.BIND~ to return the first two
    characters as a cons.
 
 #+BEGIN_SRC lisp
@@ -270,7 +268,7 @@ primatives return.
 	       (.bind (.item) 
 		     (lambda (char2) 
 		       (.result (cons char char2))))))))
-  (.run two-chars "asd"))
+  (run two-chars "asd"))
 ;;=> (((#\a . #\s) . "d"))
 #+END_SRC
 
@@ -280,19 +278,19 @@ primatives return.
 
 ** A quick word on monads
 
-   By virtue of having the functions =.BIND= and =.RESULT= defined as they
+   By virtue of having the functions ~.BIND~ and ~.RESULT~ defined as they
    are, our parser interface forms a monad. A monad is, essentially,
-   a category of things that provide the functions =.BIND= and =.RESULT=.
+   a category of things that provide the functions ~.BIND~ and ~.RESULT~.
    
-   Of course, just having functions called =.BIND= and =.RESULT= does not a
-   monad make. There are other contracts that =.BIND= (also known as
-   pipe, >>=, *, or let) or =.RESULT= (aka lift, unit, return) must
-   fulfil.
+   Of course, just having functions called ~.BIND~ and ~.RESULT~ does not a
+   monad make. There are other contracts that ~.BIND~ (also known as
+   pipe, >>~, *, or let) or ~.RESULT~ (aka lift, unit, return) must
+   fulfill.
 
 *** The monad laws
 
     In order to be properly categorized as a monad, the thing
-    providing a definition for =.BIND= and =.RESULT= must obey three laws
+    providing a definition for ~.BIND~ and ~.RESULT~ must obey three laws
     (a static functional programmer would say 'must have a certain
     type', but the word type means something different to a dynamic
     functional programmer, so we'll avoid it here)
@@ -300,12 +298,12 @@ primatives return.
     In order to describe those laws we need to define a few terms
 
     - Monadic Value (MV) :: a function that, given a value, returns a
-	 value in the form expected by the internals of =.BIND=. In our
+	 value in the form expected by the internals of ~.BIND~. In our
 	 examples above, a parser (taking an input and returning a
 	 list of results) is the Monadic Value.
 
     - Monadic Function (MF) :: A function that, given a value returns
-	 a monadic value encapsulating that value. =.RESULT= is the
+	 a monadic value encapsulating that value. ~.RESULT~ is the
 	 canonical Monadic Function
     
     In Object-Oriented terms, the MF is a constructor, and the MV an
@@ -323,7 +321,7 @@ primatives return.
     
     With static type systems, the compiler will enforce this contract
     for you. In a dynamic system, we just need to be a little more
-    careful. Proving the monad laws for our =.BIND= and =.RESULT= is
+    careful. Proving the monad laws for our ~.BIND~ and ~.RESULT~ is
     left as an exercise.
 
     That's really all there is to monads except for syntax, which
@@ -331,10 +329,10 @@ primatives return.
     obey, and monads have other uses beyond parsing, but we're
     reaching the end of our scope already.
 
-* =.SATISFIES=  : the parser predicate
+* ~.SATISFIES~  : the parser predicate
 
     Often, we only want to consume input if a certain
-    condition is true. This where =.SATISFIES= comes in.
+    condition is true. This where ~.SATISFIES~ comes in.
 
 #+NAME: tutorial_.satisfies
 #+BEGIN_SRC lisp
@@ -351,29 +349,30 @@ primatives return.
 
 #+NAME: tutorial-test_.satisfies
 #+BEGIN_SRC lisp
-(.run (.satisfies #'digit-char-p) "1 and") 
+(run (.satisfies #'digit-char-p) "1 and") 
 ;;=> ((#\1 . " and"))
 #+END_SRC
 
 
-   If =.ITEM= fails, so will the =.SATISFIES= parser. This is because (bind
-   (fail) MF) will always fail. =.FAIL=, also known as =.ZERO=, is a function
+   If ~.ITEM~ fails, so will the ~.SATISFIES~ parser. This is because (bind
+   (fail) MF) will always fail. ~.FAIL~, also known as ~.ZERO~, is a function
    belonging to a category of monads knows as "monads with a
    zero". That's not terribly important for parsing, but interesting if
    you're into that sort of thing.
 
-** =.IS= and =.IS-NOT=
+** ~.IS~ and ~.IS-NOT~
 
-Imagine we need to parse all characters that come before a =#\;=. The
-simple way is to have a function that uses =CL:NOT=,
+Imagine we need to parse all characters that come before a ~#\;~. The
+simple way is to have a function that uses ~CL:NOT~.
 
 #+BEGIN_SRC lisp
-  (.many (.satisfies 
-          (lambda (item)
-            (not (char= #\; item)))))
+  (.satisfies 
+   (lambda (item)
+     (not (char= #\; item))))
 #+END_SRC
 
-It turns out that =(.satisfies (lambda (i) (not ...)))= is quite
+
+It turns out that ~(.satisfies (lambda (i) (not ...)))~ is quite
 common, so we define a parser that has a shorter and more relevant
 name.
 
@@ -386,15 +385,23 @@ name.
 
 This makes things a lot shorter and easier to read.
 
-#+NAME: tutorial_test.is-not
-#+BEGIN_SRC lisp
-  (.run (.many (.is-not #'char= #\;))
-        "foobar;%^*&")
-;;=> (((#\f #\o #\o #\b #\a #\r) . ";%^*&"))
+#+NAME: tutorial_test.is-not 
+#+BEGIN_SRC lisp :results output code
+  (test> 
+   (run (.is-not #'char= #\;) "foobar;%^*&")       
+   => ((#\f . "oobar;%^*&")))
 #+END_SRC
 
-For that matter, now that we have =.IS-NOT=, =.SATISFIES= is a bit
-long, and does not prefix =-NOT= . So we type a few keys in
+#+NAME: tutorial_test.is-not 
+#+BEGIN_SRC lisp :results output code
+  (test> 
+   (run (.is-not #'char= #\;) ";%^*&")
+   => NIL)
+#+END_SRC
+
+
+For that matter, now that we have ~.IS-NOT~, ~.SATISFIES~ is a bit
+long, and does not prefix ~-NOT~ . So we type a few keys in
 order to save a bundle in the future.
 
 #+NAME: tutorial_.is
@@ -403,9 +410,9 @@ order to save a bundle in the future.
     (apply #'.satisfies predicate args))
 #+END_SRC
 
-** Example Parsers for letters and numbers using =.SATISFIES=
+** Example Parsers for letters and numbers using ~.SATISFIES~
 
-     =.SATISFIES= allows us to =DEFUN= some simple parsers
+     ~.SATISFIES~ allows us to ~DEFUN~ some simple parsers
 
 #+NAME: tutorial_char=digit-char|lower-case-p
 #+BEGIN_SRC lisp
@@ -425,24 +432,24 @@ order to save a bundle in the future.
 
 #+NAME: tutorial-test_char=digit-char|lower-case-p
 #+BEGIN_SRC lisp
-  (.run (.char= #\x) "xyzzy") ;=> ((#\x . "yzzy"))
-  (.run (.digit-char-p) "1234") ;=> ((#\1 . "234"))
-  (.run (.lower-case-p) "abcd") ;=> ((#\a . "bcd"))
-  (.run (.upper-case-p) "Abcd") ;=> ((#\A . "bcd"))  
-  (.run (.upper-case-p) "doh!") ;=> NIL
+  (run (.char= #\x) "xyzzy") ;=> ((#\x . "yzzy"))
+  (run (.digit-char-p) "1234") ;=> ((#\1 . "234"))
+  (run (.lower-case-p) "abcd") ;=> ((#\a . "bcd"))
+  (run (.upper-case-p) "Abcd") ;=> ((#\A . "bcd"))  
+  (run (.upper-case-p) "doh!") ;=> NIL
 
 #+END_SRC
-* =.PLUS=, the non-deterministic choice combinator
+* ~.PLUS~, the non-deterministic choice combinator
 
    If we want to combine our earlier parsers, say to create an
-   =ALPHANUMERIC-CHAR= from =UPPER-CASE-P= and =LOWER-CASE-P= we need
+   ~ALPHANUMERIC-CHAR~ from ~UPPER-CASE-P~ and ~LOWER-CASE-P~ we need
    a combinator capable of making the choice between them.
 
    In some cases, it may not be an exclusive choice. There might be
    multiple ways to parse a string, or a later pass might resolve the
    ambiguity.
 
-   For example, in one of our earlier examples of =.BIND=, we saw a
+   For example, in one of our earlier examples of ~.BIND~, we saw a
    parser that returned the first two characters in a stream. This
    parser will fail if there is only one character left in the input.
 
@@ -460,7 +467,7 @@ order to save a bundle in the future.
   If we want to parse one or two characters, or an arbitrarily long
   series of characters, we need some a way to express that.
 
-  Enter the =.PLUS= combinator.
+  Enter the ~.PLUS~ combinator.
 
 #+NAME: tutorial_.plus
 #+BEGIN_SRC lisp
@@ -491,7 +498,7 @@ order to save a bundle in the future.
 
     The examples used in the original paper[1] are for letters and
     alphanumeric characters. There's no good reason to use them over
-    /(.satisfies #'alpha-char-p)/and the like, but they do serve as 
+    /(.is #'alpha-char-p)/and the like, but they do serve as 
     simple example.
 
 #+BEGIN_SRC lisp
@@ -500,7 +507,7 @@ order to save a bundle in the future.
 (funcall (letter) "foo") => ((#\f . "oo"))
 (funcall (letter) "1foo") => NIL
 
-(defun alphanumeric () (plus (letter) (=digit-char)))
+(defun alphanumeric () (plus (letter) (.digit-char)))
 
 (funcall (alphanumeric) "1foo") => ((#\1 . "foo"))
 (funcall (alphanumeric) "!1foo") => NIL
@@ -531,35 +538,33 @@ order to save a bundle in the future.
   that it returns all the possible strings of letters. 
 
   This is obviously inefficient when one only requires the first value.
-  required, a deterministic combinator =.OR=, will be introduced later
+  required, a deterministic combinator ~.OR~, will be introduced later
   in the tutorial.
 
-** TODO Effeciency 
+** Efficiency 
 
-   =.FIRST= is the real choice when it comes down to it, as =.PLUS= really does matter.
+   ~.FIRST~ is the real choice when it comes down to it, as ~.PLUS~ really does matter.
 
+#+NAME: tutorial_.first
 #+BEGIN_SRC lisp
-
 (defun .first (parser)
   (lambda (input)
-    (let ((results (funcall parser input)))
+    (let ((results (run parser input)))
        (when results (list (cl:first results))))))
-
 #+END_SRC
 
-#+RESULTS:
-: \.FIRST
+*** TODO Explain more about ~.FIRST~
    
-* Syntax : =LET*= and the identity monad
+* Syntax : ~LET*~ and the identity monad
 
-   If you read the earlier section on monads, you'd know that =.BIND=
-   and =.RESULT= are the interface to many different types of monads,
+   If you read the earlier section on monads, you'd know that ~.BIND~
+   and ~.RESULT~ are the interface to many different types of monads,
    of which our parser is but one example. If you didn't, you know
    now. Again, if you're not at all interested and really just want to
    keep on parsing, [[%20defmacro%20letstar][skip down to the macro]]. 
 
    The most basic monad is the identity monad. A definition of its
-   =.BIND= and =.RESULT= might look like the following.
+   ~.BIND~ and ~.RESULT~ might look like the following.
 
 #+BEGIN_SRC lisp
 
@@ -637,10 +642,10 @@ do
   One could legitimately say that the common lisp package is an
   instance of the identity monad, if one cared for such insights.
 
-** =.LET*=, our version of =LET*= like do notation
+** ~.LET*~, our version of ~LET*~ like do notation
 # << defmacro letstar >>
 
-    A =LET*= like construct is the obvious notation for a lisper to take
+    A ~LET*~ like construct is the obvious notation for a lisper to take
     advantage of the monadic nature of parsers. It's often useful to
     ignore a value. In haskell, the underscore character is used to
     denote an ignorable variable, so we'll use the same convention.
@@ -664,11 +669,11 @@ do
              (.result a)) "")
 #+END_SRC
 
-If we replace =.BIND= with our =I-BIND= function above, we get a macro
-that is equivalent to =LET*=. =.LET*= binds the results of parsers,
-and is a much nicer way to work over nesting =.BIND='s.
+If we replace ~.BIND~ with our ~I-BIND~ function above, we get a macro
+that is equivalent to ~LET*~. ~.LET*~ binds the results of parsers,
+and is a much nicer way to work over nesting ~.BIND~'s.
 
-** Examples using =.LET*=
+** Examples using ~.LET*~
 
     Using recursion like we did in our WORD parser, we'll create a
     parser that matches a specific string.
@@ -677,28 +682,31 @@ and is a much nicer way to work over nesting =.BIND='s.
 #+NAME: tutorial_.string=
 #+BEGIN_SRC lisp
   (defun .string= (string)
-    (if (input-empty-p string)
-        (.result "")
+    (if (string= string "")
+        (.result nil)
         (.let* 
-            ((_ (.is 'char= (input-first string)))
-             (_ (.string= (input-rest string))))
+            ((_ (.is 'char= (aref string 0)))
+             (_ (.string= (subseq string 1))))
           (.result string))))
   #+END_SRC
 
-#+NAME: tutorial_test.string=
-#+BEGIN_SRC lisp
-  (funcall (.string= "asdf")  "asdfjkl") ;=> (("asdf" . "jkl"))
-  (funcall (.string= "asdf")  "asd") ; => NIL
+
+#+NAME: tutorial-test.string=
+#+BEGIN_SRC lisp :results output code
+(run (.string= "asdf")  "asdfjkl") => (("asdf" . "jkl"))
 #+END_SRC
 
-    Once can see how much nicer =.LET*= notation is, and also how the
-    ignorable =_= comes in handy. 
+#+BEGIN_SRC lisp :results output code
+(run (.string= "asdf")  "asd") => NIL
+#+END_SRC
 
+    Once can see how much nicer ~.LET*~ notation is, and also how the
+    ignorable ~_~ comes in handy. 
 
-* =.MAP= : The repetition combinator
+* ~.MAP~ : The repetition combinator
    
-   Earlier, we defined a parser, =.WORD=, using =.BIND= and a recursive
-   call. Lets define a similar parser using =.LET*= that returns a list
+   Earlier, we defined a parser, ~.WORD~, using ~.BIND~ and a recursive
+   call. Lets define a similar parser using ~.LET*~ that returns a list
    of letters.
 
 #+BEGIN_SRC lisp
@@ -710,7 +718,9 @@ and is a much nicer way to work over nesting =.BIND='s.
 #+END_SRC 
 
    This pattern can easily be abstracted into a more general
-   combinator, =.ZERO-OR-MORE=
+   combinator, ~.ZERO-OR-MORE~
+
+** ~.ZERO-OR-MORE~
 
 #+BEGIN_SRC lisp
   (defun .zero-or-more (parser)
@@ -722,12 +732,12 @@ and is a much nicer way to work over nesting =.BIND='s.
 
 #+BEGIN_SRC lisp
   (test> 
-   (.run (.zero-or-more (.char= #\a)) "aaaab")
+   (run (.zero-or-more (.char= #\a)) "aaaab"
    =>  (((#\a #\a #\a #\a) . "b") ((#\a #\a #\a) . "ab") ((#\a #\a) . "aab")
         ((#\a) . "aaab") (NIL . "aaaab")))
   
   (test> 
-   (.run (.zero-or-more (.char= #\a)) "bbbba")
+   (run (.zero-or-more (.char= #\a)) "bbbba")
    =>
    ((NIL . "bbbba")))
 #+END_SRC 
@@ -736,6 +746,8 @@ and is a much nicer way to work over nesting =.BIND='s.
    matches one or more items and fails otherwise, we can define one in
    terms of ZERO-OR-MORE, can call it, appropriately enough,
    ONE-OR-MORE.
+
+** ~.ONE-OR-MORE~
 
 #+BEGIN_SRC lisp
 (defun .one-or-more (parser)
@@ -751,39 +763,187 @@ and is a much nicer way to work over nesting =.BIND='s.
    => NIL)
 #+END_SRC 
 
-We could now define a =TWO-OR-MORE= and =THREE-OR-MORE= etc., but it
-is likely better to define a function to rule them all. The
-=:AT-LEAST= keyword solves the "how many do we want to start with?"
 
-# There is also the simple matter of using =.PLUS= or *<whatever>*. The
-# =:USING= argument takes care of that.
+We could now define a ~TWO-OR-MORE~ and ~THREE-OR-MORE~ etc., but it
+is likely better to define a function to rule them all. It needs a
+base to rule from.
 
-So, we can specify the =.MAP= parser as follows.
+** /Function/ ~.MAPC~, ~.MAPCAR~
+
+# ~.MAPCAN~, ~.MAPL~, ~.MAPLIST~, ~.MAPCON~
+
+*Syntax:*
+
+~.mapc~ /parser/  => /parser/
+
+~.mapcar~ /parser/ => /result-list/
+
+# mapcan function &rest lists+ => concatenated-results
+
+# mapl function &rest lists+ => list-1
+
+# maplist function &rest lists+ => result-list
+
+# mapcon function &rest lists+ => concatenated-results
+
+*Arguments and Values:*
+
+ - /parser/ :: The parser that is attempted
+ - /result-list/ :: a list
+
+*Description:* 
+
+The mapping operation involves attempting /parser/ many times. Except
+for ~.mapc~ and ~.mapl~, the result contains the results returned by
+the /parser/. 
+
+# In the cases of mapc and mapl, the resulting sequence is list.
+
+~.MAPCAR~ operates on successive results of /parser/. The iteration
+terminates when the /parser/ fails. The value returned by mapcar is a
+list of the results of /parser/
+
+#+name: tutorial-.mapcar
+#+BEGIN_SRC lisp
+(defun .mapcar (parser)
+    (.plus (.let* ((x parser)
+                   (xs (.mapcar parser)))
+             (.result (cons x xs)))
+           (.result ())))
+#+END_SRC
+
+#+RESULTS:
+: \.MAPCAR
+
+~.MAPC~ is like ~.MAPCAR~ except that the results of applying function are
+not accumulated. The /parser/ argument is returned as a result.
+
+#+name: tutorial-.mapc
+#+BEGIN_SRC lisp
+(defun .mapc (parser)
+    (.plus (.let* ((_ parser)
+                   (_ (.mapc parser)))
+             (.result parser))
+           (.result parser)))
+#+END_SRC
+
+#+RESULTS:
+: \.MAPC
+
+*Examples:*
+
+#+BEGIN_SRC lisp :results output code
+   
+   (test> (parse (.prog1 (.mapcar (.item))
+                          (.char= #\!))
+                  "Yay!")
+     => (#\Y #\a #\y))
+ 
+#+END_SRC
+
+#+BEGIN_SRC lisp :results output code     
+  (let ((/parser/ (.item)))
+    (test> (parse (.let* ((parser (.prog1 (.mapc /parser/)
+                                          (.char= #\!)))
+                          (char parser))
+                    (.result (cons (eq parser /parser/)
+                                   char)))
+                  "Holy Guacamole!?")
+           =>(T . #\?)))                       
+#+END_SRC
+
+** /Function/ ~.MAKE-LIST~, ~.MAKE-SEQUENCE~
+
+Often, we know what we want, and how many we want, all at once. So,
+just like ~CL:MAKE-LIST~, we take a number.
+
+*Syntax:*
+
+~.make-list~ /size/ /&key/ /initial-element/ => /list/
+
+~.make-sequence~ /result-type/ /size/ /&key/ /initial-element/ => /list/
+
+*Arguments and Values:*
+
+ - /size/ :: a non-negative integer.
+
+ - /initial-element/ :: a /parser/. The default is ~(.item)~.
+
+ - /list/ :: a list.
+
+*Description:*
+
+Returns a /list/ of /length/ given by /size/, each of the elements of
+which is a successful run of the /initial-element/ parser.
+
+#+name: tutorial-.make-list
+#+BEGIN_SRC lisp
+  (defun .make-list (size &key (initial-element (.item)))
+    (if (zerop size) 
+        (.result nil)
+        (.let* ((first initial-element)
+                (rest (.make-list (1- size) 
+                                  :initial-element initial-element)))
+          (.result (list* first rest)))))               
+#+END_SRC
+
+#+name: tutorial-.make-sequence
+#+BEGIN_SRC lisp  
+  (defun .make-sequence (type length &key (initial-element (.item)))
+    (.let* ((list (.make-list length :initial-element initial-element)))
+      (.result (coerce list type))))               
+#+END_SRC
+
+** /Function/ ~.CONCATENATE~ 
+
+There are often mulitple parsers that are run one after another, and
+the results joined together at the end. ~.CONCATENATE~ takes care of
+that.
+
+#+NAME: tutorial-.concatenate
+#+BEGIN_SRC lisp
+  (defun .concatenate (output-type-spec &rest parsers)
+    (if (not parsers)
+        (.fail)
+        (.let* ((first (first parsers))
+                (rest (if (rest parsers)
+                          (apply 
+                           #'.concatenate output-type-spec (rest parsers))
+                          (.result nil))))
+          (.result (cl:concatenate output-type-spec first rest)))))
+  
+#+END_SRC
+
+
+** ~.MAP~ : ONE /FUNCTION/ TO RULE THEM ALL!
+
+In the end
+
+The ~:AT-LEAST~ keyword solves the "how many do we want to start
+with?". We have decided on ~1~ as the default, as most of the time we
+do want the parser to succeed, and besides that, ~.OPTIONAL~ is a
+better way of saying ~:at-least 0~.
+
+# There is also the simple matter of using ~.PLUS~
+# or *<whatever>*. The ~:USING~ argument takes care of that.
+
+So, we can specify the ~.MAP~ parser as follows.
 
 #+NAME: tutorial_.map
 #+BEGIN_SRC lisp
   (defun .map (result-type parser
-               &key
+               &key 
                  (at-least 1))
-    "=> =LIST= of /parser/ results."
-    (labels ((.zero-or-more (parser)
-               (.plus 
-                (.result nil)
-                (.let* ((x parser)
-                        (xs (.zero-or-more parser)))
-                  (.result (cons x xs))))))
-      (if (zerop at-least)
-          (.zero-or-more parser)
-          (.let* ((x parser)
-                  (xs (.map result-type parser
-                            :at-least (1- at-least))))
-            (.result (coerce (cons x xs) result-type))))))
+    "=> a ~result-type~ of /parser/ results."
+    (.let* ((list-1 (.make-list at-least :initial-element parser))
+            (list-2 (funcall (if result-type #'.mapcar #'.mapc) parser)))
+      (.result (when result-type (concatenate result-type list-1 list-2)))))
 #+END_SRC
 
 #+RESULTS: tutorial_.map
 : \.MAP
 
-** Examples using =.MAP=
+** Examples using ~.MAP~
 
     Let's make a parser for standard quoted strings. We'll use
     the #\' character as the quotes, and the #\| character as the
@@ -793,34 +953,31 @@ So, we can specify the =.MAP= parser as follows.
 #+BEGIN_SRC lisp :results value 
   (defun .quoted-string (&key (quote #\')
                            (escape #\|))
-     (.prog2 (.is 'char= quote))
-             (.map (.plus (.is-not 'char= quote)
-                           (.progn 
-                            (.is 'char= escape)
-                            (.item)))
-                   :result-type 'cl:string))
+    (.let* ((_ (.char= quote))
+            (string 
+             (.map 'string 
+                   (.plus (.let* ((_ (.char= escape)))
+                            (.item))
+                          (.is-not 'char= quote))))
+            (_ (.char= quote)))
+      (.result string)))
   
-     'cl:string))
-  
-  (funcall (.quoted-string) "'The quote char is |' and the escape char is ||.'''"))
   
 #+END_SRC
 
-#+RESULTS:
 | (The quote char is ' and the escape char is | . . '') |
 
-* =.OR=, =.NOT=, and =.AND= : deterministic logic combinators
+* ~.OR~, ~.NOT~, and ~.AND~ : deterministic logic combinators
+** ~.OR~
 
-** =.OR=
-
-   =.OR= is a deterministic =.PLUS=. It take any number of parsers. The
+   ~.OR~ is a deterministic ~.PLUS~. It take any number of parsers. The
    first parser is run, and if it succeeds, evaluation short circuits
    and the result of the parser is returned. Otherwise, the next
    parser is run, and so on, until one succeeds or there are no more
    parsers. 
    
-   We can't use =.BIND= or =.LET*= for =.OR= because it would fail if one of
-   its parsers fails. As such, =.OR= must be a primitive.
+   We can't use ~.BIND~ or ~.LET*~ for ~.OR~ because it would fail if one of
+   its parsers fails. As such, ~.OR~ must be a primitive.
 
 #+NAME: tutorial_.or
 #+BEGIN_SRC lisp
@@ -831,8 +988,8 @@ So, we can specify the =.MAP= parser as follows.
 	  (funcall (apply #'.or parsers) input)))))
 #+END_SRC 
 
-** =.NOT=
-   Similarly, =.NOT=, which continues parsing only when the parser
+** ~.NOT~
+   Similarly, ~.NOT~, which continues parsing only when the parser
    fails, is primitive as well.
 #+NAME: tutorial_.not
 #+BEGIN_SRC lisp
@@ -844,13 +1001,13 @@ So, we can specify the =.MAP= parser as follows.
 	  (list (cons t input))))))
 #+END_SRC
 
-** =.AND=
+** ~.AND~
 
-   On the other hand, =.AND= can be defined in terms of =IF=, and
-   doesn't even need to test for failure, as =.BIND= handles failure
+   On the other hand, ~.AND~ can be defined in terms of ~IF~, and
+   doesn't even need to test for failure, as ~.BIND~ handles failure
    automatically.
 
-   =.AND= (known as '>>' in haskell) sequentially composes parsers,
+   ~.AND~ (known as '>>' in haskell) sequentially composes parsers,
    discarding the results of all but the last one, and returning that
    result.
 
@@ -864,22 +1021,26 @@ So, we can specify the =.MAP= parser as follows.
 
 #+END_SRC
 
-** Examples using  =.OR=, =.NOT=, and =.AND=
+** Examples using  ~.OR~, ~.NOT~, and ~.AND~
+*** ~.NO-MORE-INPUT~
 
-    Now that we have =.NOT=, we can specifically test for failure rather
-    than abort the parse entirely. since the primitive parser =.ITEM=
-    only fails when the input is empty, we can define =.NO-MORE-INPUT= by
+    Now that we have ~.NOT~, we can specifically test for failure rather
+    than abort the parse entirely. since the primitive parser ~.ITEM~
+    only fails when the input is empty, we can define ~.NO-MORE-INPUT~ by
     negating it.
 
+#+name:tutorial_.no-more-input
 #+BEGIN_SRC lisp
   (defun .no-more-input ()
    (.not (.item)))
 #+END_SRC
-    
-    Using =.AND=, we can implement =.PROGN= (which is really just =.AND=
-    because it will fail when the parser does), =.PROG1= (which comes in
-    handy for matching things and the end of the line, or when there
-    is no more input) and =.PROG2=, which as we will see is also quite useful.
+
+*** ~.PROGN~, ~.PROG1~, ~.PROG2~
+    Using ~.AND~, we can implement ~.PROGN~ (which is really just
+    ~.AND~ because it will fail when the parser does), ~.PROG1~ (which
+    comes in handy for matching things and the end of the line, or
+    when there is no more input) and ~.PROG2~, which as we will see is
+    also quite useful.
 
 #+NAME: tutorial_.progn    
 #+BEGIN_SRC lisp
@@ -895,202 +1056,3761 @@ So, we can specify the =.MAP= parser as follows.
     (.and parser1 (apply #'.prog1 parser2 parsers)))
 #+END_SRC
 
-  The MAYBE combinator, which allows a parser to fail and still
-  continue, is a natural use of =.OR=.  
+*** ~.OPTIONAL~
 
-#+NAME: tutorial_.maybe
+  The OPTIONAL combinator, which allows a parser to fail and still
+  continue, is a natural use of ~.OR~.  
+
+#+NAME: tutorial_.optional
 #+BEGIN_SRC lisp
-  (defun .maybe (parser)
+  (defun .optional (parser)
     (.or parser (.result nil)))
 #+END_SRC 
 
-  Finally, using =.OR=, =.AND= and =.NOT=, we can make parser versions of
+  Finally, using ~.OR~, ~.AND~ and ~.NOT~, we can make parser versions of
   the lisp conditionals we all know and love.
 
 #+BEGIN_SRC lisp
-
-(defun .if (test-parser then-parser &optional (else-parser (result nil)))
-  (=or (=and test-parser then-parser)
-       else-parser))
-
-(defun .when (test-parser then-parser)
-   "we define =when in terms of IF, but it's really just =AND again"
-  (.if test-parser then-parser))
-
-(defun .unless (test-parser then-parser)
-   "defined in term of =when, even though it's just (=AND (=NOT ...))"
-  (.when (.not test-parser) then-parser))
-
+  
+  (defun .if (test-parser then-parser 
+              &optional (else-parser (.fail)))
+    (let ((no (gensym)))
+      (.let* ((no? (.or test-parser (.result no))))
+        (if (not (eq no? no))
+            then-parser
+            else-parser))))
+  
+  (defun .when (test-parser then-parser)
+     "we define .when in terms of .IF, but it's really just .AND again"
+    (.if test-parser then-parser))
+  
+  (defun .unless (test-parser then-parser)
+     "defined in term of .when, even though it's just (.AND (.NOT ...))"
+    (.when (.not test-parser) then-parser))
+  
 #+END_SRC
     
+* ~.LINE~: ~#\Newline~ is a decent break up
 
-* Parsing Literate Org Mode Source
+Lines are quite important for lexing/parsing most text files. For
+everything befre the last line, it is very simple.
 
-The file that this tutorial is 'weaved'[4] from has a lot of code. That
-code really needs to be in a source file. While we 'weave' the
-documentation, we 'tangle' the source code itself, all from the same
-'literate' programming documents. 
+#+BEGIN_SRC lisp
+(defun .line-newline ()
+  (.let* ((line (.optional (.map 'list (.is-not #'char= #\Newline))))
+          (newline (.is #'char= #\Newline)))
+  (.result (concatenate 'string line (string newline)))))
+#+END_SRC
 
-** The Code Block
+The issue is that the last "line" has text but does does not end with
+a ~#\Newline~, and the first line does not start with one. Beyond
+that, for testing we often want to try with only one "line" and most
+likely without the newline at all.
 
-[[http://orgmode.org/][Org Mode]] syntax is used to layout the literate 'essay' that makes up
-this tutorial. The source code itself is stored in Code Blocks.
+In other words, if we want the entire thing as a list of lines, this
+works, as the string ends with a ~#\Newline~
+
+#+BEGIN_SRC lisp :results output code :noweb yes
+  (test> (parse (.map 'list (.line-newline))
+                  "foo
+  bar
+    ")
+   ;; Which gives us :
+         => ("foo
+  "
+             "bar
+  "))
+    
+#+END_SRC
+
+If there is no newline at the end, it does not.
+
+#+BEGIN_SRC lisp :results output code :noweb yes
+  (test> (parse (.map 'list (.line-newline))
+                  "foo
+  bar")
+   ;; Which gives us :
+         => ("foo
+  "))   
+#+END_SRC
+
+In the latter case, there is no "bar" at the end, which makes it
+almost not worth the journey there.
+
+As luck would have it, there is a ~.NOT~ which will help us tie up
+this particular line.
+
+#+BEGIN_SRC lisp
+  (defun .last-line ()
+   (.prog1 (.map 'string (.is-not #'char= #\Newline))
+           (.not (.item))))
+#+END_SRC
+
+#+RESULTS:
+: \.LAST-LINE
+
+#+BEGIN_SRC lisp :results output code
+
+(test> (parse (.last-line) "bar")
+     => "bar")
+
+(test> (parse (.last-line) "bar
+")
+     => "bar")
+
+#+END_SRC
+
+For every line save for the last will fail for ~.LAST-LINE~, but every
+line save for an empty one will succeed until the end of that parser,
+so using ~.PLUS~ would be a waste of CPU time.
+
+#+BEGIN_SRC lisp
+  (defun .line ()
+    (.plus (.line-newline)
+           (.last-line)))  
+#+END_SRC
+
+Using ~.OR~ to run the last only when the first fails works great, but
+in the end there is a better option. We combine them both into one
+function.
+
+***** /Function/ ~.LINE~
+
+#+name: tutorial-line
+#+BEGIN_SRC lisp  
+  (defun .line ()
+    (.let* ((text (.optional 
+                   (.first (.map 'list (.is-not #'char= #\Newline)))))
+            (newline (.or (.char= #\Newline)
+                          (.and (.not (.item)) 
+                                (.result '())))))
+           (if (or text newline)
+               (.result (concatenate 'string text (when newline (string newline))))
+               (.fail))))
+#+END_SRC
+
+
+#+BEGIN_SRC lisp :results output code :noweb yes
+  (test> (parse (.map 'list (.document-line)) "
+  <<weave-out-line-test-text>>")
+         ' ("
+  "
+   "* Very important
+  "
+   "** Less important
+  "
+   "*** A detail
+  "
+   "And the rest is text
+  "
+   "between the headers."))
+  
+#+END_SRC
+
+#+BEGIN_SRC lisp :results output code :noweb yes
+ (parse (.map 'list (.line)) "
+  <<weave-out-line-test-text>>")
+#+END_SRC
+
+#+BEGIN_SRC lisp
+=>
+("
+"
+ " * Very important
+"
+ " ** Less important
+"
+ " *** A detail
+"
+ " And the rest is text
+"
+ " between the headers.")
+#+END_SRC
+
+There is really one important detail, and that is the use of ~.OR~
+,which could easily be ~.PLUS~ without much waste, rather than having
+the ~TEXT~ be ~.OPTIONAL~ or ~:AT-LEAST 0~. 
+
+What we do not want is the parser to always succeed when there is no
+input, because then the parser succeeds when there is no input, /ad
+infinitum/.
+
+This kind of event happens quite often when using ~.NOT~, so often it
+is best to take another approach, yet ~(.not (.item))~ does have its
+uses. Thus, caution is in the air.
+
+* Outline mode: the start of a good relationship.
+
+The file that makes up this tutorial is in Org mode. 
+
+"Org is implemented on top of Outline mode."[fn:oo] 
+
+"It distinguishes between different header levels and the plain
+text. The default mechanism uses asterisks to determine header
+levels."[fn:eom]
+
+#+NAME: weave-out-line-test-text
+#+BEGIN_SRC org
+  ,* Very important
+  ,** Less important
+  ,*** A detail
+  And the rest is text
+  between the headers.
+#+END_SRC 
+ 
+** ~.STARS~: called asterisk or star, ~#\*~ is the start
+
+"Headlines define the structure of an outline tree. The headlines in
+Org start with one or more stars, on the left margin"[fn:oh]
+
+#+NAME: weave-stars
+#+BEGIN_SRC lisp  
+  (defun .stars ()
+    (.prog1 (.map 'string (.char= #\*))
+            (.char= #\Space)))                           
+#+END_SRC
+
+** ~HEADLINE~ and ~.SUB-HEADLINE~: all are subs
+# << ~HEADLINE~ and ~.SUB-HEADLINE~ >>
+
+#+name: weave-headline
+#+BEGIN_SRC lisp
+  (defstruct headline
+    (stars (list))
+    text)
+   
+  (defun headline-level (headline)
+    (length (headline-stars headline)))
+  
+  (defun .sub-headline (&key (from-level 0))
+     (.let* ((stars (.stars))
+             (headline (if (< from-level (length stars))
+                           (.line)
+                           (.fail))))
+       (.result (make-headline :stars stars
+                               :text (string-right-trim '(#\Newline) headline)))))
+#+END_SRC
+
+#+BEGIN_SRC lisp :noweb yes
+
+
+
+#+END_SRC
+
+** ~.OUTLINE-LINE~, ~.OUTLINE-TEXT~
+# << ~.OUTLINE-LINE~, ~.OUTLINE-TEXT~ >>
+
+Unless there are ~(.STARS)~ , it is a ~(.LINE)~.  Otherwise
+it is a [[%20%3DHEADLINE%3D%20and%20%3D.SUB-HEADLINE%3D%20][~HEADLINE~]].
+ 
+#+NAME: weave-outline-line
+#+BEGIN_SRC lisp     
+  (defun .outline-line ()
+    (.and (.not (.stars))
+          (.line)))
+#+END_SRC
+
+Many ~(.outline-line)~'s, ~concatenate~'ed, form the text we
+desire.
+
+# <<weave-outline-text>>
+#+NAME: weave-outline-text
+#+BEGIN_SRC lisp     
+  (defun .outline-text ()
+    (.let* ((lines (.first (.map 'list (.outline-line)))))
+      (.result (apply #'concatenate 'string lines)))) 
+#+END_SRC
+
+** ~.OUTLINE~: that is, after all, the mode we are in
+# << ~.OUTLINE~ >>
+
+Our definition of an outline is very simple. A Headline, a text
+section, and sub-outlines.
+
+#+name: weave-outline-struct
+#+BEGIN_SRC lisp
+  (defstruct outline 
+    (headline nil)
+    text 
+    sub-outlines)
+#+END_SRC
+
+ - headline :: If there is not a level we are starting from, then
+               there is no headline. Otherwise an outline must begin
+               with a headline that is a part of level we are starting
+               from.
+	       
+	       #+name: weave-.outline-headline
+	       #+BEGIN_SRC lisp
+                 (if from-level
+                     (.sub-headline :from-level from-level)
+                     (.result nil))
+	       #+END_SRC
+
+ - text  :: After the headline comes an optional text section.
+		
+		#+name: weave-.outline-text
+		#+BEGIN_SRC lisp
+                  (.optional (.outline-text))
+		#+END_SRC
+
+ - sub-outlines :: If we had a headline, that means we are at a
+                   level. Otherwise, we are at 0. So, optionally,
+                   there are other outlines we contain.
+		   
+                   #+name: weave-.outline-sub-outlines
+		   #+BEGIN_SRC lisp
+                     (let ((new-level (if headline 
+                                          (headline-level headline)
+                                          0)))
+                       (.optional (.first (.map 'list (.outline :from-level new-level)))))
+		   #+END_SRC
+
+*** /Function/ ~.OUTLINE~
+
+Putting it all together we get an excellent start to an Org Mode file
+parse.
+
+#+name: weave-outline
+#+BEGIN_SRC lisp :noweb yes
+  (defun .outline (&key from-level)
+      (.let* ((headline 
+               <<weave-.outline-headline>>)
+              (text <<weave-.outline-text>>)
+              (sub-outlines 
+               <<weave-.outline-sub-outlines>>))
+        (.result (make-outline :headline headline 
+                               :text text 
+                               :sub-outlines sub-outlines))))
+    
+#+END_SRC
+
+**** *Examples:*
+
+#+name: example-outline-test-string
+#+BEGIN_SRC lisp :noweb yes :results output code 
+  (defparameter *outline-test-string*
+                "#+TITLE: Weave outline test
+  <<weave-org-outline-test-text>>")
+#+END_SRC
+
+#+END_SRC
+
+
+#+name: example-.outline
+#+BEGIN_SRC lisp :noweb yes :results output code
+  (parse (.outline) *outline-test-string*)  
+  =>
+  #S(OUTLINE
+     :HEADLINE NIL
+     :TEXT "#+TITLE: Weave outline test
+   This is the title by default.
+  
+   This is a sentence thingie.
+  
+  "
+     :SUB-OUTLINES (#S(OUTLINE
+                       :HEADLINE #S(HEADLINE
+                                    :STARS "*"
+                                    :TEXT "Top level headline")
+                       :TEXT NIL
+                       :SUB-OUTLINES (#S(OUTLINE
+                                         :HEADLINE #S(HEADLINE
+                                                      :STARS "**"
+                                                      :TEXT "Second level")
+                                         :TEXT NIL
+                                         :SUB-OUTLINES (#S(OUTLINE
+                                                           :HEADLINE #S(HEADLINE
+                                                                        :STARS "***"
+                                                                        :TEXT "3rd level")
+                                                           :TEXT "    some text
+  "
+                                                           :SUB-OUTLINES NIL)
+                                                        #S(OUTLINE
+                                                           :HEADLINE #S(HEADLINE
+                                                                        :STARS "***"
+                                                                        :TEXT "3rd level")
+                                                           :TEXT "    more text
+  
+  "
+                                                           :SUB-OUTLINES NIL)))))
+                    #S(OUTLINE
+                       :HEADLINE #S(HEADLINE
+                                    :STARS "*"
+                                    :TEXT "Another top level headline")
+                       :TEXT NIL
+                       :SUB-OUTLINES NIL)))
+#+END_SRC
+
+**** COMMENT Testing
+
+#+BEGIN_SRC lisp :noweb yes
+  (test> 
+  <<example-.outline>>
+  :test #'equalp)   
+#+END_SRC
+
+#+RESULTS:
+: T
+
+#+NAME: weave-org-outline-test-text
+#+BEGIN_SRC org
+   This is the title by default.
+
+   This is a sentence thingie.
+
+  ,* Top level headline
+  ,** Second level
+  ,*** 3rd level
+      some text
+  ,*** 3rd level
+      more text
+  
+  ,* Another top level headline
+#+END_SRC
+
+
+#+RESULTS:
+: *TUTORIAL-OUTLINE*
+
+* The Code Block
+# <<The Code Block>>
+
+#+BEGIN_SRC org
+  Live code blocks can be specified with a `src' block or inline.  The
+  structure of a `src' block is
+  
+  
+    ,#+NAME: <name>
+    ,#+BEGIN_SRC <language> <switches> <header arguments>
+     <body>
+    ,#+END_SRC
+  
+  The `#+NAME:' line is optional, and can be used to name the code
+  block.  Live code blocks require that a language be specified on
+  the #+BEGIN\_SRC' line.  Switches and header arguments are optional.
+  
+  -- http://orgmode.org/org.html#Structure-of-code-blocks
+#+END_SRC
+
+We will store a code block in a struct.
+
+#+name: tutorial-code-block
+#+BEGIN_SRC lisp
+  (defstruct code-block 
+    name
+    language
+    switches
+    header-arguments
+    body)
+
+#+END_SRC
+
+The parser itself is very simple. 
+
+#+name: tutorial-code-block
+#+BEGIN_SRC lisp
+  (defun .code-block ()
+      (.let* ((name (.optional 
+                     (|#+NAME: <name>|)))
+              (begin (|#+BEGIN_SRC <language> <switches> <header arguments>|))
+              (body  (|<body> #+END_SRC|)))
+         (.result (apply #'make-code-block :name name :body body begin))))
+
+#+END_SRC
+
+#+RESULTS: tutorial-code-block
+: \.CODE-BLOCK
+
+#+RESULTS:
+: \.CODE-BLOCK
+
+#+BEGIN_SRC lisp :results output code
+  (let ((string "  #+NAME: <name>
+  ,#+BEGIN_SRC <language> <switches> <header arguments>
+    <body>
+  ,#+END_SRC     "))
+         (test> (run (.code-block) string)
+	
+))
+ 
+#+END_SRC
+  
+*** ~|#+NAME: |~
+
+#+name: code-block-name
+#+BEGIN_SRC lisp
+  (defun |#+NAME: <name>| ()
+    (.progn (.optional (.whitespace))
+            (.string-equal "#+NAME: ")
+            (.prog1 (.map 'string (.is-not 'char= #\Newline))
+              (.char= #\Newline))))
+#+END_SRC
+
+
+#+NAME: tutorial_test.code-block-name
+#+BEGIN_SRC lisp :noweb yes
+  (test> (run 
+    (|#+NAME: |)
+"  #+naME: foobar
+")
+    => (("foobar" . "")))
+  
+#+END_SRC
+
+#+RESULTS: tutorial_test.code-block-name
+: T
+
+*** ~|#+BEGIN\_SRC" <language> <switches> <header arguments>|~
 
 #+BEGIN_QUOTE
-Live code blocks can be specified with a `src' block or inline.  The
-structure of a `src' block is
-
-     ,#+BEGIN_SRC org
-       ,#+NAME: <name>
-       ,#+BEGIN_SRC <language> <switches> <header arguments>
-         <body>
-       ,#+END_SRC     
-     ,#+END_SRC
-
-The `#+NAME:' line is optional, and can be used to name the code
-block.  Live code blocks require that a language be specified on
+Live code blocks require that a language be specified on
 the #+BEGIN\_SRC' line.  Switches and header arguments are optional.
 
 -- http://orgmode.org/org.html#Structure-of-code-blocks
 #+END_QUOTE
 
-*** =.STRING-EQUAL=: For case insensitivity
+#+name: tutorial_.begin_src
+#+BEGIN_SRC lisp :noweb yes
+  (defun |#+BEGIN_SRC <language> <switches> <header arguments>| ()
+      (.let* ((language (|#+BEGIN_SRC <language>|))
+              (switches (|<switches>|))
+              (args (|<header arguments>|)))
+        (.result (list :language language
+                       :switches switches
+                       :header-arguments args))))
+#+END_SRC 
 
-The =#+NAME=, =#+BEGIN_SRC= and =#+END_SRC= are case insensitive. We have
-=.CHAR== and =.STRING== already, so =.CHAR-EQUAL= and =.STRING-EQUAL=
+#+RESULTS: tutorial_.begin_src
+: |
+
+**** ~|#+BEGIN_SRC <language>|~
+
+#+name: tutorial_.begin_src
+#+BEGIN_SRC lisp
+  (defun |#+BEGIN_SRC <language>| ()
+    (.progn (.optional (.whitespace))
+            (.string-equal "#+BEGIN_SRC ")
+            (.atom)))
+#+END_SRC
+
+
+#+BEGIN_SRC lisp :results output code
+(test> (run (|#+BEGIN_SRC <language>|) "  #+BEGIN_SRC lisp :noweb yes")
+    => (("lisp" . " :noweb yes")))
+
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC lisp
+
+T
+#+END_SRC
+
+#+BEGIN_QUOTE
+
+#+END_QUOTE
+**** ~<switches>~ 
+
+#+BEGIN_QUOTE
+[...] in ~src~ snippets, you can add a -n switch to
+the end of the ~BEGIN~ line, to get the lines of the example
+numbered. -- http://orgmode.org/org.html#Literal-examples
+#+END_QUOTE
+
+#+name: code-block-switches
+#+BEGIN_SRC lisp -n
+(.string= " -n")
+#+END_SRC
+
+#+BEGIN_QUOTE
+If you use a ~+n~ switch, the numbering from the previous
+numbered snippet will be continued in the current one. 
+
+ -- http://orgmode.org/org.html#Literal-examples
+#+END_QUOTE
+
+#+name: code-block-switches
+#+BEGIN_SRC lisp +n
+(.string= " +n")
+#+END_SRC
+
+#+BEGIN_QUOTE
+In literal examples, Org will interpret strings like ‘(ref:name)’ as
+labels, and use them as targets for special hyperlinks like [[(name)]]
+(i.e., the reference name enclosed in single parenthesis). In HTML,
+hovering the mouse over such a link will remote-highlight the
+corresponding code line, which is kind of cool.
+
+You can also add a -r switch which removes the labels from the
+source code121. With the -n switch, links to these references
+will be labelled by the line numbers from the code listing,
+otherwise links will use the labels with no parentheses.
+#+END_QUOTE
+
+#+name: code-block-switches
+#+BEGIN_SRC lisp +n -r
+(.string= " -r") ;; (ref:switch)
+#+END_SRC
+
+So, using [[(switch)]] you now can link to a specific label. It is a
+normal org [[(switch)][link]], so it can be edited.
+
+#+BEGIN_QUOTE
+If the syntax for the label format conflicts with the language syntax,
+use a -l switch to change the format, for example
+   ‘#+BEGIN\_SRC pascal -n -r -l "((%s))"’. See also the variable ~org-coderef-label-format~.
+
+-- http://orgmode.org/org.html#Literal-examples
+#+END_QUOTE
+
+#+name: code-block-switches
+#+BEGIN_SRC lisp 
+  (.let* ((-l (.string= " -l "))
+          (format (.prog2 (.char= #\")
+                          (.map 'string (.is-not 'char= #\"))
+                          (.char= #\"))))
+    (.result (list :switch -l
+                   :format format)))
+#+END_SRC
+***** ~(defun |<switches>| () ...)~
+
+#+NAME: tangle_code-block-switches
+#+BEGIN_SRC lisp :noweb yes
+  (defun |<switches>| ()
+    (flet ((.switch ()
+             (.or
+              <<code-block-switches>>)))
+      (.map 'list 
+            (.let* ((switch (.switch)))
+              (.result (if (stringp switch) 
+                           (list :switch switch)
+                           switch)))
+            :at-least 0)))
+#+END_SRC
+
+**** ~<header arguments>~
+# <<~<header arguments>~>>
+
+"Header Arguments" are quite odd. As far as I can tell, a [[http://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node108.html][Propery List]]
+with keys as symbols in the keyword package, but the values are not
+~.ATOM~'s, but rather whatever comes before the next key, syntax wise.
+
+Regardless, what is nice about it is the fact that is does make up the
+rest of the line.  An ~ALIST~ will be fine on our side.
+
+#+NAME: tangle_code-block-header-arguments-org
+#+BEGIN_SRC org
+  ,#+BEGIN_SRC lisp :results output code :noweb yes :padline no
+#+END_SRC
+
+#+NAME: tangle_code-block-header-arguments
+#+BEGIN_SRC lisp :results value code
+  (defun |<header arguments>| ()
+    (flet ((.arg ()
+             (.let* ((key (.progn 
+                           (.optional (.whitespace))
+                           (.char= #\:)
+                           (.atom)))
+                     (value (.progn 
+                             (.whitespace) 
+                             (.map 'string (.is-not 'member '(#\Newline #\:))))))
+               (.result (cons key value)))))
+      (.or (.prog1 (.first (.map 'list (.arg)))
+              (.char= #\Newline))
+           (.line))))
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC lisp
+#+END_SRC
+
+#+BEGIN_SRC lisp :results output code :noweb yes
+  (test> (run (|<header arguments>|) 
+               (format nil " :results output code :noweb yes :padline no~%")))
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC lisp
+
+(((("results" . "output code ") ("noweb" . "yes ") ("padline" . "no")) . ""))
+#+END_SRC
+
+*** ~|<body> #+END_SRC|~
+#+name: tutorial_body-end-src
+#+BEGIN_SRC lisp
+  (defun |<body> #+END_SRC| ()
+    (flet ((.end () 
+             (.prog2 (.optional (.whitespace))
+                 (.string-equal "#+END_SRC") 
+                (.or (.is 'member '(#\space #\newline))
+                     (.not (.item))))))
+      (.prog1 
+       (.map 'list (.and (.not (.end))
+                         (.line)))
+       (.end))))
+#+END_SRC
+
+#+RESULTS: tutorial_body-end-src
+: |<body>
+
+*** ~.code-block-plist~ 
+
+#+name: tangle_.code-block-plist
+#+BEGIN_SRC lisp :noweb yes
+    
+    <<code-block-name>>
+    
+    <<tutorial_code-block-switches>>
+    
+    <<tutorial_.begin_src>>
+    
+    <<tutorial_body-end-src>>
+    
+    (defun .code-block-plist ()
+      (.let* ((name (.optional 
+                     (|#+NAME: |)))
+              (begin (|#+BEGIN_SRC <language> <switches> <header arguments>|))
+              (body  (|<body> #+END_SRC|)))
+         (.result (list* :name name :body body begin))))
+#+END_SRC
+
+
+#+BEGIN_SRC lisp :results output code
+  (let ((string "  #+NAME: <name>
+  ,#+BEGIN_SRC <language> <switches> <header arguments>
+    <body>
+  ,#+END_SRC     "))
+         (test> (run (.code-block-plist) string)
+	 => (((:NAME "<name>" :BODY ("    <body>") :LANGUAGE "<language>" :SWITCHES NIL
+   :HEADER-ARGUMENTS " <switches> <header arguments>")
+  . "    "))
+))
+  
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC lisp
+
+T
+#+END_SRC
+
+#<<
+
+**** Noweb prefix lines
+ 
+#+name: tangle_code-block-noweb-body
+#+BEGIN_SRC lisp  
+  (defun code-block-noweb-body (code-block)
+    (mapcan (lambda (line) (or (caar (run (.noweb) line)) (list line)))
+            (whitespace-prefix-trim (code-block-body code-block))))
+#+END_SRC
+
+#+RESULTS: tangle_code-block-noweb-body
+: CODE-BLOCK-NOWEB-BODY
+
+#+BEGIN_QUOTE
+Noweb insertions are now placed behind the line prefix of the
+<<reference>>. This behavior is illustrated in the following
+example. Because the <<example>> noweb reference appears behind the
+SQL comment syntax, each line of the expanded noweb reference will be
+commented.
+
+This code block:
+#+BEGIN_SRC sql
+     -- <<example>>
+#+END_SRC
+
+expands to:
+
+#+BEGIN_SRC sql
+     -- this is the
+     -- multi-line body of example
+#+END_SRC
+
+Note that noweb replacement text that does not contain any newlines
+will not be affected by this change, so it is still possible to use
+inline noweb references.[fn:noweb]
+#+END_QUOTE
+
+#+name: tangle_.noweb
+#+BEGIN_SRC lisp
+  (defun .noweb (&optional (code-blocks  *code-blocks*))
+    (.let* ((prefix (.map 'string (.item) :at-least 0))
+            (name 
+             (.prog2 (.string= "<<")
+                     (.map 'string (.item))
+                     (.string= ">>")))
+              (body 
+               (let ((blocks
+                         (remove-if-not (lambda (cb) (string= name (code-block-name cb)))
+                                  code-blocks)))
+                 (.result (and blocks (loop for block in blocks :append 
+                                       (whitespace-prefix-trim
+                                      (code-block-noweb-body block)))))))
+            (new-body (.result (loop :for line :in body 
+                                  :collect (concatenate 'string prefix line))))
+            (postfix (.first (.map 'string (.item) :at-least 0))))
+      (.result (if new-body 
+                   (prog1 new-body
+                     (setf (car (last new-body))
+                           (concatenate 
+                            'string 
+                            (car (last new-body))
+                            postfix)))
+                   (list (concatenate 'string prefix postfix))))))
+#+END_SRC
+
+#+RESULTS: tangle_.noweb
+: \.NOWEB1
+
+#+RESULTS:
+: \.NOWEB
+
+
+
+#+RESULTS:
+#+BEGIN_SRC lisp
+
+CODE-BLOCK-NOWEB-BODY
+#+END_SRC
+
+#+BEGIN_SRC lisp :results output code
+  (let ((*code-blocks* (org-code-blocks 
+                        "#+NAME: test
+  ,#+BEGIN_SRC sql
+       -- <<example>> with a postfix!
+       -- <<example>>
+  ,#+END_SRC
+  
+  ,#+NAME: example
+  ,#+BEGIN_SRC sql
+       this is the
+       multi-line body of example
+  ,#+END_SRC")))
+  
+    (mapcar 'code-block-noweb-body
+            ,*code-blocks*))
+  
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC lisp
+
+(("-- <<example>> with a postfix!" "-- <<example>>")
+ ("this is the" "multi-line body of example"))
+#+END_SRC
+
+=>
+#+BEGIN_SRC lisp
+(((("-- this is the" "-- multi-line body of example with a postfix!") . "")
+  (("-- this is the" "-- multi-line body of example") . ""))
+ (("this is the" . "") ("multi-line body of example" . "")))
+#+END_SRC
+
+#+BEGIN_SRC lisp :noweb yes :results output code
+  
+  (let ((*code-blocks* 
+         (org-code-blocks (merge-pathnames 
+                           "doc/tutorial.org" 
+                           (asdf:system-source-directory :smug))))
+        (code-block
+         <<tangle_tangle-code-block>>))
+    (with-open-file (s #P"/tmp/tangle.lisp" 
+                       :direction :output
+                       :if-does-not-exist :create
+                       :if-exists :supersede)
+      (let ((lines (code-block-noweb-body code-block)))
+        (princ (first lines) s)
+        (loop for line in (rest lines)
+           :do (terpri s)
+             (princ line s))
+        (terpri s))))
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC lisp
+
+NIL
+#+END_SRC
+
+
+#+BEGIN_SRC sh
+diff /tmp/tangle.lisp ~/me/src/smug/tangle.lisp | less
+#+END_SRC
+
+#+RESULTS:
+| 199c199 |       |              |         |        |               |
+| <       | (list | (concatenate | 'string | prefix | postfix)))))) |
+| ---     |       |              |         |        |               |
+| >       | (list | (concatenate | 'string | prefix | postfix)))))) |
+
+* Literate Org Mode
+
+The file that this tutorial is 'weaved'[4] from has a lot of code. That
+code really needs to be in a source file. While we 'weave' the
+documentation, we 'tangle' the source code itself, all from the same
+'literate' programming documents.
+
+[[http://orgmode.org/][Org Mode]] syntax is used to layout the literate 'essay' that makes up
+this tutorial. The documentation is like Outline mode. The source code
+itself is stored in Code Blocks.
+
+
+
+** Org mode document
+# <<Org mode document>>
+#+TODO: TODO STARTED | DONE
+
+Since Org mode is based on Outline mode, we can start off with
+that.
+
+*** /Structure Class/ ~org-document~
+
+#+NAME: org-document
+#+BEGIN_SRC lisp
+  (defstruct org-document
+     body 
+     sections
+     settings)
+#+END_SRC
+
+*** /Function/ ~org-document~
+
+#+NAME: org-document
+#+BEGIN_SRC lisp
+  (defgeneric org-document (thing)
+    (:method ((outline outline))
+      (let* (*org-file-settings*
+             (text (outline-text outline))
+             (body (parse (.org-body) text))
+             (sections (mapcar #'org-section (outline-sub-outlines outline))))
+        (make-org-document 
+         :body (loop-and-concatenate body)
+         :sections sections
+         :settings *org-file-settings*)))
+    (:method ((string string))
+      (org-document (parse (.outline) string)))
+    (:method ((stream stream))
+      (org-document 
+       (with-output-to-string (string)
+         (alexandria:copy-stream stream string))))
+    (:method ((pathname pathname))
+      (org-document (alexandria:read-file-into-string pathname))))
+#+END_SRC
+
+#+RESULTS: org-document
+: #<STANDARD-GENERIC-FUNCTION ORG-DOCUMENT (4)>
+
+*** /Parser/ ~.org-body~
+
+#+NAME: org-body-section-and-file
+#+BEGIN_SRC lisp
+  (defun .org-body ()
+    (.let* ((body (.first (.map 'list (.org-element)))))
+      (.result (loop-and-concatenate body))))
+#+END_SRC
+
+*** STARTED Elements: That's what it's all about
+
+#+NAME: org-body-section-and-file
+#+BEGIN_SRC lisp  
+  (defun .org-element ()
+    (.or 
+     (.org-file-setting)
+     (.quote)
+     (.code-block)
+     (.org-line)))
+#+END_SRC
+
+#+RESULTS: org-body-section-and-file
+: \.ORG-ELEMENT
+
+*** in-buffer settings
+
+The first line has a ~#+~ on it, so we will deal with that.
+
+"Org mode uses special lines in the buffer to define settings on a
+per-file basis. These lines start with a ‘#+’ followed by a keyword, a
+colon, and then individual words defining a setting. Several setting
+words can be in the same line, but you can also have multiple lines
+for the keyword."[fn:org-in-buffer]
+
+#+name: org-in-buffer-settings
+#+BEGIN_SRC lisp
+  (defstruct setting
+    name words)
+  
+  (defun .setting ()
+    (.let* ((name 
+             (.prog2 (.string= "#+")
+                     (.map 'string (.is-not 'member '(#\: #\Space #\Newline)))
+                     (.string= ": ")))
+            (words (.line)))
+      (.result (make-setting 
+                :name name 
+                :words (string-right-trim '(#\Newline) words)))))
+#+END_SRC
+
+#+BEGIN_SRC lisp :results output code
+
+(parse (.setting) "#+TITLE: this is a setting!") 
+=> #S(SETTING :NAME "TITLE" :WORDS "this is a setting!")
+
+#+END_SRC
+
+**** /Parser/ ~.ORG-FILE-SETTING~
+
+The documentations tells us that the settings are on a per-file basis.
+
+#+name: org-.org-file-setting
+#+BEGIN_SRC lisp
+  (defvar *org-file-settings*)
+  
+  (defun .org-file-setting ()
+    (.let* ((setting (.setting))
+            (existing (.result (when (boundp '*org-file-settings*)
+                                 (find (setting-name setting) *org-file-settings*
+                                       :key 'setting-name 
+                                       :test #'string-equal))))
+            (_ (.result (if existing
+                            (setf (setting-words existing)
+                                  (concatenate 'string (setting-words existing)
+                                               " " (setting-words setting)))
+                            (when (boundp '*org-file-settings*)
+                              (push setting *org-file-settings*))))))
+      (unless (boundp '*org-file-settings*)
+        (error "org-file-settings is not bound"))
+      
+      (.result (copy-setting setting))))
+#+END_SRC
+
+**** ~.ORG-FILE~: Phase one
+
+
+#+BEGIN_SRC lisp
+(defstruct org-file
+  body sections settings)
+
+  (defun .org-line () (.line))
+#+END_SRC
+
+
+
+#+BEGIN_SRC lisp  
+  (defun .org-file ()
+    (.let* ((body (.first (.map 'list (.or (.org-file-setting)
+                                           (.org-line))))))
+      (.result (make-org-file
+                :settings *org-file-settings*
+                :body (loop-and-concatenae body)))))
+  
+  (defun org-file-from-string (string)
+   (let (*org-file-settings*)
+     (parse (.org-file) string)))
+#+END_SRC
+
+#+RESULTS:
+: ORG-FILE
+
+#+BEGIN_SRC lisp
+(org-file-from-string (outline-text smug/make:*tutorial-outline*))
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+#S(ORG-FILE
+   :SETTINGS (#S(SETTING :NAME "TITLE" :WORDS "SMUG Tutorial : Literate"))
+   :BODY (#S(SETTING :NAME "TITLE" :WORDS "SMUG Tutorial : Literate") "
+  This tutorial started as a translation of Monadic Parser
+  Combinators[1], or at least the first half, into common
+  lisp. Discussion of static types and the details of monads are
+  somewhat omitted as we're simply concerned with parsing.
+
+  The example code in the following document is completely
+  self-contained, and does not require an installation of the ~SMUG~
+  library.
+
+  No prior experience with functional programming, monads or recursive
+  descent parsing is assumed. The only requirements are an ANSI
+  common lisp environment, and a burning desire to find a better way
+  to parse.
+  
+"))
+""
+#+end_example
+
+*** COMMENT This is the ~.ORG-LINE~
+
+#+name: org-line
+#+BEGIN_SRC lisp
+  (defun .org-line ()
+    (.or (.let* ((line (.first 
+                        (.map 'list (.or (.org-inline)
+                                         (.is-not 'char= #\Newline))))))
+                      (.result line))
+         (.line)))
+  
+#+END_SRC
+
+#+RESULTS: org-line
+: \.ORG-LINE
+
+*** /Parser/ ~.org-inline~ 
+
+#+name: org-inline
+#+BEGIN_SRC lisp
+  (defun .org-inline ()
+    (.or (.markup)
+         (.footnote-reference)))
+  
+#+END_SRC
+
+#+RESULTS: org-inline
+: \.ORG-INLINE
+
+#+RESULTS:
+: \.ORG-LINE
+
+*** /Function/ ~loop-and-concatenate~
+
+We have an [[weave-outline-text][~OUTLINE-TEXT~]] function that accesses the text as one
+string that we ~CONCATENATE~'d earlier.
+
+#+name: tutorial-outline-text
+#+BEGIN_SRC lisp :results output code
+(outline-text smug/make:*tutorial-outline*)
+#+END_SRC
+=>
+#+BEGIN_SRC lisp :noweb yes
+<<tutorial-outline-text()>>
+#+END_SRC
+
+For now.
+
+#+NAME: tutorial-loop-and-concatenate-asd
+#+BEGIN_SRC lisp
+  (defun loop-and-concatenate (list &aux body text)
+    (if (stringp list) 
+         list
+         (flet ((text () 
+                  (when text                        
+                    (push (apply #'concatenate 'string 
+                                 (mapcar #'string (nreverse text)))
+                          body)
+                    (setf text nil))))
+           (let ((result 
+                  (loop :for thing in list
+                     :do  (typecase thing
+                            ((or character string)
+                             (push thing text))
+                            (list 
+                             (let ((result (loop-and-concatenate thing)))
+                               (typecase result
+                                 (string 
+                                  (push result text))
+                                 (list 
+                                  (progn (text)
+                                         (dolist (i result)
+                                           (push i body))))
+                                 (t (text)
+                                    (push result body)))))
+                               (t (text) (push thing body)))
+                     :finally 
+                     (text) (return (nreverse body)))))
+             (if (rest result) result (first result))))))
+  
+#+END_SRC 
+
+#+NAME: tutorial-loop-and-concatenate-strings
+#+BEGIN_SRC lisp
+  (defun loop-and-concatenate (list-or-thing &optional return)
+   (if (not (listp list-or-thing))
+       list-or-thing
+       (let (text body)
+         (flet ((push-text () 
+                  (when text                        
+                    (push (apply #'concatenate 'string 
+                                 (mapcar #'string (nreverse text)))
+                          body)
+                    (setf text nil))))
+           (let ((result
+                  (loop :for thing :in list-or-thing
+                     :do
+                     (etypecase thing
+                       ((or character string)
+                        (push thing text))
+                       (list 
+                        (push-text)
+                        (dolist (i (loop-and-concatenate thing t))
+                          (etypecase i
+                            ((or character string)
+                             (push i text))
+                            (t 
+                             (push-text)
+                             (push i body)))))
+                       (t (push-text)
+                          (push thing body)))
+                     :finally 
+                     (push-text) (return (nreverse body)))))
+             (cond (return result)
+                   ((rest result) (loop-and-concatenate result t))
+                   (t (first result))  ))))))
+                       
+    
+  
+#+END_SRC 
+
+#+RESULTS: tutorial-loop-and-concatenate-strings
+: LOOP-AND-CONCATENATE
+
+#+RESULTS:
+: LOOP-AND-CONCATENATE-STRINGS
+
+#+BEGIN_SRC lisp :results output code
+  (loop-and-concatenate 
+       (list #\a " string of" 5 7 8 " things"))
+  
+#+END_SRC
+=> 
+#+BEGIN_SRC lisp
+("a string of" 5 7 8 " things")
+#+END_SRC
+
+#+BEGIN_SRC lisp :results output code
+  (loop-and-concatenate 
+       (list #\a " string of " (list "lists and" '(#\space #\c #\h ("a")) "rs" 'and t)))
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC lisp
+
+("a string of lists and chars" AND T)
+#+END_SRC
+
+*** ~ORG-SECTION~ and ~ORG-FILE~: Phase Two.
+
+So, we have everything up until the first outline, or sub-outlines
+really, parsed. At this point we want to turn outlines into sections
+or files.
+
+#+name: org-section-and-org-file-struct
+#+BEGIN_SRC lisp
+  
+  (defstruct org-headline 
+   stars body)
+  
+  (defstruct org-section 
+    headline
+    body sections)
+  
+  (defstruct org-file
+   body sections
+    settings)    
+  
+#+END_SRC
+
+#+RESULTS: org-section-and-org-file-struct
+: ORG-FILE
+
+#+RESULTS:
+: ORG-FILE
+
+#+NAME: org-body-section-and-file
+#+BEGIN_SRC lisp
+  
+  (defun org-section (outline)
+    (let* ((headline (outline-headline outline))
+           (headline-text (headline-text headline))
+           (headline-body (when headline-text 
+                            (parse (.org-body) headline-text)))
+           (text (outline-text outline))
+           (body (when text (parse (.org-body) text)))
+           (sections (mapcar #'org-section (outline-sub-outlines outline))))
+      (make-org-section :headline (make-org-headline
+                                   :stars (headline-stars headline)
+                                   :body headline-body)
+                        :body (loop-and-concatenate body)
+                        :sections sections)))
+  
+  (defun org-file (outline)
+    (let* (*org-file-settings*
+           (text (outline-text outline))
+           (body (when text (parse (.org-body) text)))
+           (sections (mapcar #'org-section (outline-sub-outlines outline))))
+      (make-org-file 
+       :body (loop-and-concatenate body)
+       :sections sections
+       :settings *org-file-settings*)))
+#+END_SRC
+
+#+RESULTS:
+: ORG-FILE
+
+**** *examples* 
+
+#+BEGIN_SRC lisp :results output code
+(org-file-body (org-file smug/make:*tutorial-outline*)))
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC lisp
+
+(#S(SETTING :NAME "TITLE" :WORDS "SMUG Tutorial : Literate") "
+  This tutorial started as a translation of Monadic Parser
+"
+ ("  Combinators" #S(FOOTNOTE-REFERENCE :MARKER "1")
+  ", or at least the first half, into common
+")
+ "  lisp. Discussion of static types and the details of monads are
+  somewhat omitted as we're simply concerned with parsing.
+
+  The example code in the following document is completely
+  self-contained, and does not require an installation of the ~SMUG~
+  library.
+
+  No prior experience with functional programming, monads or recursive
+  descent parsing is assumed. The only requirements are an ANSI
+  common lisp environment, and a burning desire to find a better way
+  to parse.
+  
+")
+#+END_SRC
+
+#+BEGIN_SRC lisp :results output code
+(first (org-file-sections (org-file smug/make:*tutorial-outline*)))
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC lisp
+
+#S(ORG-SECTION
+   :HEADLINE #S(SMUG/PARSER/OUTLINE::HEADLINE :STARS "*" :TEXT "Introduction ")
+   :BODY ("
+ This tutorial, like this library, is based on an approach to
+ building parsers using higher-order functions (combinators) that is
+ popular in the functional programming community. Incidentally, these
+ parsers form an instance of something called a monad, which is
+ itself a useful construct with implications beyond parsing.
+
+"
+          (" With great debt to Monadic Parser Combinators"
+           #S(FOOTNOTE-REFERENCE :MARKER "1") ", the paper from
+")
+          " which this library is derived, this tutorial presents a step by step
+ introduction to the topics of parser combinators and monads and
+ their use in common lisp.
+
+")
+   :SECTIONS (#S(ORG-SECTION
+                 :HEADLINE #S(SMUG/PARSER/OUTLINE::HEADLINE
+                              :STARS "**"
+                              :TEXT "Common Lisp")
+                 :BODY ("
+ In some cases, the natural name for a parser conflicts with a name in
+"
+                        (" the " #S(MARKUP :STYLE :CODE :TEXT "COMMON-LISP")
+                         " package. Rather then shadow the symbols, I've
+")
+                        " chosen to prefix all parser names with a #\\. character. It is thought that
+ this aids usability, as one can simply (:use :smug/tutorial). It also
+ helps to distinguish parser returning functions from other
+ functions.
+
+")
+                 :SECTIONS NIL)))
+#+END_SRC
+
+
+
+
+*** ~FOOTNOTE-REFERENCE~: it is in a line.
+
+"The footnote reference is simply the marker in square brackets,
+inside text"[fn:org-footnote].
+
+#+BEGIN_SRC org
+  This tutorial started as a translation of Monadic Parser
+  Combinators[1]
+#+END_SRC
+
+Our first sentence has a footnote reference it. In this case, the
+marker is a numerical reference, a digit between two squares
+brackets. The manual also mentions that anything starting with ~fn:~
+is a footnote reference.
+
+#+name: org-footnote
+#+BEGIN_SRC lisp
+  (defstruct footnote-reference 
+    marker)
+  
+  (defun .footnote-marker ()
+    (.or (.map 'string (.is 'digit-char-p))
+         (.concatenate 'string (.string= "fn:")
+                       (.map 'string (.is-not 'member '(#\Newline #\]))))))
+  
+  (defun .footnote-reference () 
+    (.let* ((marker (.prog2 (.char= #\[)
+                        (.footnote-marker)
+                      (.char= #\]))))
+      (.result (make-footnote-reference :marker marker))))
+      
+#+END_SRC
+
+#+RESULTS:
+: \.FOOTNOTE-REFERENCE
+
+
+#+BEGIN_SRC lisp
+  
+  (defun .org-line ()
+    (.or (.let* ((line (.first 
+                        (.map 'list (.or (.footnote-reference)
+                                         (.is-not 'char= #\Newline)))))
+                 (\n (.optional (.is 'char= #\Newline))))
+           (setf (cdr (last line)) (when \n (list \n)))
+           (let ((now (loop-and-concatenate  line)))            
+             (.result (if (rest now) now (first now)))))
+         (.line)))
+#+END_SRC
+
+#+RESULTS:
+: \.ORG-LINE
+
+#+BEGIN_SRC lisp
+
+(org-file  (outline-text smug/make:*tutorial-outline*))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+#S(ORG-FILE
+   :SETTINGS (#S(SETTING :NAME "TITLE" :WORDS "SMUG Tutorial : Literate"))
+   :BODY (#S(SETTING :NAME "TITLE" :WORDS "SMUG Tutorial : Literate") "
+  This tutorial started as a translation of Monadic Parser
+"
+          ("  Combinators" #S(FOOTNOTE-REFERENCE :MARKER "1")
+           ", or at least the first half, into common
+")
+          "  lisp. Discussion of static types and the details of monads are
+  somewhat omitted as we're simply concerned with parsing.
+
+  The example code in the following document is completely
+  self-contained, and does not require an installation of the =SMUG=
+  library.
+
+  No prior experience with functional programming, monads or recursive
+  descent parsing is assumed. The only requirements are an ANSI
+  common lisp environment, and a burning desire to find a better way
+  to parse.
+  
+"))
+""
+#+end_example
+
+*** Org Objects and ~*ORG-OBJECT-PARSERS*~ : if it is not a character, what is it?
+
+We already have two parsers which produce objects from org syntax.
+
+#+NAME:  asdasd*org-object-parsers*
+#+BEGIN_SRC lisp
+  (defparameter *org-object-parsers* 
+    '(.footnote-reference
+      .org-file-setting))
+#+END_SRC
+
+We may as well make a parser for /all/ objects.
+
+#+NAME: org-object
+#+BEGIN_SRC lisp
+  (defun .org-object ()
+    
+    (let ((list (mapcar #'funcall *org-object-parsers*)))
+      (setf (cdr (last list)) (list (.is 'char= #\Newline)))      
+      (apply #'.or list)))
+#+END_SRC
+
+#+RESULTS:
+: \.ORG-OBJECT
+
+
+*** ~.MARKUP~: Code (and emphasis and monospace etc)
+
+"You can make words *bold*, /italic/, _underlined_, =verbatim= and
+~code~, and, if you must, ‘+strike-through+’. Text in the code and
+verbatim string is not processed for Org mode specific syntax, it is
+exported verbatim."[fn:org-markup]
+
+We have a  "=~SMUG~=" word in our second paragraph.
+
+#+NAME: org.markup
+#+BEGIN_SRC lisp
+  (defstruct markup 
+    text style char)
+  
+  (defun .markup () 
+    (flet ((.m (style char)
+             (.let* ((text (.progn (.is 'char= char)
+                                   (.map 'string (.is-not 'member (list char #\Newline)))))
+                     (close (.prog1
+                             (.is-not 'char= #\space)
+                             (.is 'char= char))))
+               (.result (make-markup 
+                         :style style
+                         :char char
+                         :text (concatenate 'string text (string close)))))))
+      (.or (.m :bold #\*)
+           (.m :italic #\/)
+           (.m :underlined #\_)
+           (.m :verbatim #\=)
+           (.m :code #\~)
+           (.m :strike-through #\+))))
+#+END_SRC
+
+Of course, since we already have ~*ORG-OBJECT-PARSERS*~, a ~PUSHNEW~ is not a bad idea.
+
+#+BEGIN_SRC lisp
+(pushnew  '.markup *org-object-parsers*)
+#+END_SRC
+
+#+BEGIN_SRC lisp
+  (org-file-from-string  (outline-text smug/make:*tutorial-outline*))  
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+#S(ORG-FILE
+   :SETTINGS (#S(SETTING :NAME "TITLE" :WORDS "SMUG Tutorial : Literate"))
+   :BODY (#S(SETTING :NAME "TITLE" :WORDS "SMUG Tutorial : Literate") "
+  This tutorial started as a translation of Monadic Parser
+"
+          ("  Combinators" #S(FOOTNOTE-REFERENCE :MARKER "1")
+           ", or at least the first half, into common
+")
+          "  lisp. Discussion of static types and the details of monads are
+  somewhat omitted as we're simply concerned with parsing.
+
+  The example code in the following document is completely
+"
+          ("  self-contained, and does not require an installation of the "
+           #S(MARKUP :STYLE :CODE :TEXT "SMUG") "
+")
+          "  library.
+
+  No prior experience with functional programming, monads or recursive
+  descent parsing is assumed. The only requirements are an ANSI
+  common lisp environment, and a burning desire to find a better way
+  to parse.
+  
+"))
+""
+#+end_example
+
+*** ~ORG-SECTION~ and ~ORG-FILE~: Phase Two.
+
+So, we have everything up until the first outline, or sub-outlines
+really, parsed. At this point we want to turn outlines into sections
+or files.
+
+#+name: org-section-and-org-file-struct
+#+BEGIN_SRC lisp
+  
+  (defstruct org-headline 
+   stars body)
+  
+  (defstruct org-section 
+    headline
+    body sections)
+  
+  (defstruct org-file
+   body sections
+    settings)    
+  
+#+END_SRC
+
+#+RESULTS: org-section-and-org-file-struct
+: ORG-FILE
+
+#+RESULTS:
+: ORG-FILE
+
+#+NAME: org-body-section-and-fileaa
+#+BEGIN_SRC lisp
+  
+  (defun org-section (outline)
+    (let* ((headline (outline-headline outline))
+           (headline-text (headline-text headline))
+           (headline-body (when headline-text 
+                            (parse (.org-body) headline-text)))
+           (text (outline-text outline))
+           (body (when text (parse (.org-body) text)))
+           (sections (mapcar #'org-section (outline-sub-outlines outline))))
+      (make-org-section :headline (make-org-headline
+                                   :stars (headline-stars headline)
+                                   :body headline-body)
+                        :body (loop-and-concatenate-strings body)
+                        :sections sections)))
+  
+  (defun org-file (outline)
+    (let* (*org-file-settings*
+           (text (outline-text outline))
+           (body (when text (parse (.org-body) text)))
+           (sections (mapcar #'org-section (outline-sub-outlines outline))))
+      (make-org-file 
+       :body (loop-and-concatenate-strings body)
+       :sections sections
+       :settings *org-file-settings*)))
+#+END_SRC
+
+#+RESULTS:
+: ORG-FILE
+
+**** *examples* 
+
+#+BEGIN_SRC lisp :results output code
+(org-file-body (org-file smug/make:*tutorial-outline*)))
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC lisp
+
+(#S(SETTING :NAME "TITLE" :WORDS "SMUG Tutorial : Literate") "
+  This tutorial started as a translation of Monadic Parser
+"
+ ("  Combinators" #S(FOOTNOTE-REFERENCE :MARKER "1")
+  ", or at least the first half, into common
+")
+ "  lisp. Discussion of static types and the details of monads are
+  somewhat omitted as we're simply concerned with parsing.
+
+  The example code in the following document is completely
+  self-contained, and does not require an installation of the ~SMUG~
+  library.
+
+  No prior experience with functional programming, monads or recursive
+  descent parsing is assumed. The only requirements are an ANSI
+  common lisp environment, and a burning desire to find a better way
+  to parse.
+  
+")
+#+END_SRC
+
+#+BEGIN_SRC lisp :results output code
+(first (org-file-sections (org-file smug/make:*tutorial-outline*)))
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC lisp
+
+#S(ORG-SECTION
+   :HEADLINE #S(SMUG/PARSER/OUTLINE::HEADLINE :STARS "*" :TEXT "Introduction ")
+   :BODY ("
+ This tutorial, like this library, is based on an approach to
+ building parsers using higher-order functions (combinators) that is
+ popular in the functional programming community. Incidentally, these
+ parsers form an instance of something called a monad, which is
+ itself a useful construct with implications beyond parsing.
+
+"
+          (" With great debt to Monadic Parser Combinators"
+           #S(FOOTNOTE-REFERENCE :MARKER "1") ", the paper from
+")
+          " which this library is derived, this tutorial presents a step by step
+ introduction to the topics of parser combinators and monads and
+ their use in common lisp.
+
+")
+   :SECTIONS (#S(ORG-SECTION
+                 :HEADLINE #S(SMUG/PARSER/OUTLINE::HEADLINE
+                              :STARS "**"
+                              :TEXT "Common Lisp")
+                 :BODY ("
+ In some cases, the natural name for a parser conflicts with a name in
+"
+                        (" the " #S(MARKUP :STYLE :CODE :TEXT "COMMON-LISP")
+                         " package. Rather then shadow the symbols, I've
+")
+                        " chosen to prefix all parser names with a #\\. character. It is thought that
+ this aids usability, as one can simply (:use :smug/tutorial). It also
+ helps to distinguish parser returning functions from other
+ functions.
+
+")
+                 :SECTIONS NIL)))
+#+END_SRC
+
+*** ~.QUOTE~
+
+#+BEGIN_QUOTE
+When quoting a passage from another document, it is customary to
+format this as a paragraph that is indented on both the left and the
+right margin. You can include quotations in Org mode documents like
+this:
+#+BEGIN_SRC org
+   ,#+BEGIN_QUOTE
+    Everything should be made as simple as possible,
+    but not any simpler -- Albert Einstein
+  ,#+END_QUOTE
+#+END_SRC
+-- http://orgmode.org/org.html#Paragraphs
+#+END_QUOTE
+
+
+#+BEGIN_SRC lisp
+  (defstruct blockquote (text))
+  (defun .quote ()
+    (.let* ((quote (.progn (.string-equal "#+BEGIN_QUOTE")
+                           (.line)
+                           (.first (.prog1 (.map 'list (.line))
+                                           (.string-equal "#+END_QUOTE"))))))
+      (.result (make-blockquote :text (loop-and-concatenate quote)))))
+#+END_SRC
+*** all the  ~*org-object-parsers*~
+
+
+#+NAME: org-object-parsers
+#+BEGIN_SRC lisp
+  (defparameter *org-object-parsers* 
+    '(.footnote-reference
+      .org-file-setting
+      .markup .quote))
+#+END_SRC
+
+#+RESULTS: org-object-parsers
+: *ORG-OBJECT-PARSERS*
+
+
+** /Generic Function/ ~princ-org-to-string~
+
+#+name: princ-org-to-string
+#+BEGIN_SRC lisp
+  (defun princ-org-to-string (org)
+    (with-output-to-string (s)
+      (princ-org org s)))
+  
+  (defgeneric princ-org (org &optional stream)
+    (:method (thing &optional stream)
+      (princ thing stream))
+    (:method ((list list) &optional stream)
+      (dolist (i list) (princ-org i stream))))
+  
+  (defmethod princ-org ((setting setting) &optional stream)
+    (when *print-readably*
+      (princ "#+" stream) (princ (setting-name setting) stream)
+      (princ ": " stream) (princ (setting-words setting) stream)))
+  
+  (import '(smug/parse/org::footnote-reference
+            smug/parse/org::footnote-reference-marker))
+  
+  (defmethod princ-org ((footnote-reference footnote-reference) 
+                        &optional stream)
+    (princ-org (list #\[
+                     (footnote-reference-marker footnote-reference)
+                     #\]) stream))
+  
+  (import '(smug/parse/org::markup
+            smug/parse/org::markup-text
+            smug/parse/org::markup-char))
+  
+  (defmethod princ-org ((markup markup)
+                        &optional stream)
+    (princ-org (list (markup-char markup)
+                     (markup-text markup)
+                     (markup-char markup)) 
+               stream))
+              
+#+END_SRC
+** /Generic Function/ ~<org-html>~
+
+#+name: princ-org-to-string
+#+BEGIN_SRC lisp
+  (defgeneric <org-html> (org &key &allow-other-keys)
+    (:method (thing &key &allow-other-keys)
+      (<> (:text (princ-org-to-string thing))))
+    (:method ((list list) &key &allow-other-keys)
+      (dolist (thing list)
+        (<org-html> thing))))
+  
+  (defmethod <org-html> ((setting setting) &key &allow-other-keys)
+    (<> (:comment (let ((*print-readably* t))
+                    (princ-org-to-string setting)))))
+  
+  (import '(smug/parse/org::footnote-reference
+            smug/parse/org::footnote-reference-marker))
+  
+  (defmethod <org-html> ((footnote-reference footnote-reference) 
+                         &key &allow-other-keys)
+    (<> (a :href "#")
+      (call-next-method)))
+  
+  (import '(smug/parse/org::markup
+            smug/parse/org::markup-text
+            smug/parse/org::markup-style))
+  
+  (defmethod <org-html> ((markup markup)
+                         &key &allow-other-keys)
+    (<> `(,(markup-style markup))
+      (<> (:text (markup-text markup)))))
+  
+  (import '(smug/parse/org::blockquote
+            smug/parse/org::blockquote-text))
+  
+  (defmethod <org-html> ((blockquote blockquote) 
+                         &key &allow-other-keys)
+    (<> (blockquote) 
+      (<> (:text (blockquote-text blockquote)))))
+  
+  (import '(smug/parse/org::code-block
+            smug/parse/org::code-block-body
+             smug/parse/org::code-block-language
+            ))
+  
+  (defmethod <org-html> ((code-block code-block) 
+                         &key &allow-other-keys)
+    (<> (pre)
+      (<> (code :class (code-block-language code-block))
+      (dolist (b (code-block-body code-block))      
+        (<> (:text b))))))
+              
+#+END_SRC
+
+#+RESULTS: princ-org-to-string
+: #<STANDARD-METHOD <ORG-HTML> (MARKUP) {1009227593}>
+
+** Weave : make documentation from source code
+# <<Weave : make document from source code>>
+
+**** Table of contents
+
+We have the [[Org%20mode%20document][Org mode document]]. Given that, we can start with the table of
+contents. 
+
+***** Text
+
+First, we will do so as a simple text output. 
+      
+#+BEGIN_SRC lisp
+  (defun table-of-contents (org-file)
+    (labels ((toc (section stream &optional (subs (org-section-sections section)))
+               (dolist (sub subs)
+                 (format stream "~A ~A~%" 
+                         (headline-stars (org-section-headline sub))
+                         (headline-text (org-section-headline sub)))
+                 (toc sub stream))))
+      (with-output-to-string (s) 
+        (toc org-file s (org-file-sections org-file)))))
+#+END_SRC
+
+#+RESULTS:
+: TABLE-OF-CONTENTS
+
+****** *Example:*
+
+#+BEGIN_SRC lisp :results output code :noweb yes
+  (table-of-contents (org-file smug/make:*tutorial-outline*))
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC lisp
+
+"* (Introduction )
+,** (Common Lisp)
+,* (How To Combine Parsers)
+,* (Reading Input)
+,* (The Three Primitive Parsers)
+,** (~.RESULT~)
+,** (~.FAIL~ )
+,** (~.ITEM~)
+,* (~RUN~, ~PARSE~: ~FUNCALL~ and ~CAAR~ in disguise)
+,* (~.BIND~: Our first primitive combinator)
+,** (A quick word on monads)
+,*** (The monad laws)
+,* (~.SATISFIES~  : the parser predicate)
+,** (~.IS~ and ~.IS-NOT~)
+,** (Example Parsers for letters and numbers using ~.SATISFIES~)
+,* (~.PLUS~, the non-deterministic choice combinator)
+,** (Example parsers using PLUS)
+,** (Efficiency )
+,*** (TODO Explain more about ~.FIRST~)
+,* (Syntax : ~LET*~ and the identity monad)
+,** (~.LET*~, our version of ~LET*~ like do notation)
+,** (Examples using ~.LET*~)
+,* (~.MAP~ : The repetition combinator)
+,** (~.ZERO-OR-MORE~)
+,** (~.ONE-OR-MORE~)
+,** (/Function/ ~.MAPC~, ~.MAPCAR~)
+,** (/Function/ ~.MAKE-LIST~, ~.MAKE-SEQUENCE~)
+,** (/Function/ ~.CONCATENATE~ )
+,** (~.MAP~ : ONE /FUNCTION/ TO RULE THEM ALL!)
+,** (Examples using ~.MAP~)
+,* (~.OR~, ~.NOT~, and ~.AND~ : deterministic logic combinators)
+,** (~.OR~)
+,** (~.NOT~)
+,** (~.AND~)
+,** (Examples using  ~.OR~, ~.NOT~, and ~.AND~)
+,*** (~.NO-MORE-INPUT~)
+,*** (~.PROGN~, ~.PROG1~, ~.PROG2~)
+,*** (~.OPTIONAL~)
+,* (Literate Org Mode)
+,** (~.LINE~: ~#\\Newline~ is a decent break up)
+,***** (/Function/ ~.LINE~)
+,** (Outline mode: the start of a good relationship.)
+,**** (~.STARS~: called asterisk or star, ~#\\*~ is the start)
+,**** (~HEADLINE~ and ~.SUB-HEADLINE~: all are subs)
+,**** (~.OUTLINE-LINE~, ~.OUTLINE-TEXT~)
+,**** (~.OUTLINE~: that is, after all, the mode we are in)
+,***** (/Function/ ~.OUTLINE~)
+,****** (*Examples:*)
+,****** (COMMENT Testing)
+,** (The Code Block)
+,**** (~|#+NAME: |~)
+,**** (~|#+BEGIN\\_SRC\" <language> <switches> <header arguments>|~)
+,***** (~|#+BEGIN_SRC <language>|~)
+,***** (~<switches>~ )
+,****** (~(defun |<switches>| () ...)~)
+,***** (~<header arguments>~)
+,**** (~|<body> #+END_SRC|~)
+,**** (~.code-block-plist~ )
+,***** (Noweb prefix lines)
+,** (Org mode document)
+,*** (in-buffer settings)
+,**** (/Parser/ ~.ORG-FILE-SETTING~)
+,**** (~.ORG-FILE~: Phase one)
+,*** (~FOOTNOTE-REFERENCE~: it is in a line.)
+,*** (Org Objects and ~*org-object-parsers*~ : if it is not a character, what is it?)
+,*** (This is the ~.ORG-LINE~)
+,*** (~.MARKUP~: Code (and emphasis and monospace etc))
+,*** (~ORG-SECTION~ and ~ORG-FILE~: Phase Two.)
+,**** (*examples* )
+,*** (TODO )
+,** (Weave : make documentation from source code)
+,**** (Table of contents)
+,***** (Text)
+,****** (*Example:*)
+,***** (HTML )
+,****** (~id~ attribute)
+,******* (/Function/ ~WHITESPACE-AS-UNDERSCORE~)
+,******* (/function/ ~UNIQUE-ID~)
+,****** (~<OUTLINE-UL/>~)
+,**** (~<outline-body/>)
+,** (Tangle : make code from source document)
+,*** (:tangle \"../tangle.lisp\")
+,**** (The tangle.lisp code block)
+,**** (:noweb yes)
+,*** (Parsing the file)
+,*** (~.STRING-EQUAL~: For case insensitivity)
+,** (~*debug-input*~ and friends.)
+,** (~.make-string~)
+,** (~.LINE~: many lines make up a document)
+,** (~.WHITESPACE~: member of?)
+,** (~.ATOM~ )
+,* (Development Driven Testing)
+,* (The Source Code)
+,** (~SMUG/PARSE/ORG~)
+,** (~SMUG/MAKE~)
+,** (Testing)
+,** (~SMUG/PARSE/OUTLINE~)
+,** (~SMUG/WEAVE/HTML~)
+,** (~SMUG/WEAVE~)
+,** (~SMUG/TANGLE~)
+,*** (The tangle.lisp file)
+,** (SMUG/TUTORIAL )
+,*** (SMUG/TUTORIAL primitives)
+,**** (~RUN~)
+,**** (~.FAIL~ and ~.PLUS~)
+,**** (Monad)
+,**** (~.OR~ and ~.NOT~)
+,*** (The ~INPUT~ interface functions)
+,*** (The ~PARSER~ itself)
+,*** (The tutorial.lisp file)
+,* (COMMENT ~.PROGN~, ~.PROG1~ and ~.PROG2~)
+,** (~.PROG1~)
+,* (Appendix)
+,** (Release Notes)
+,** (Task List)
+,*** (TODO Patch printf.lisp to use this code)
+,*** (TODO Make ~.line~ and ~.document-line~ merged)
+,*** (TODO reason for this)
+,*** (TODO Explain use of ~.first~ in weave)
+,*** (TODO turn /parser/ into /parse/ for the package names)
+,** (Org Mode)
+,*** (`C-c C-x b'     (`org-tree-to-indirect-buffer'))
+,*** (Emphasis and monospace)
+,* (Footnotes	 )
+"
+#+END_SRC
+~
+,**** ~.code-block-plist~ 
+,***** Noweb prefix lines
+,** Org mode document
+,*** in-buffer settings
+,**** /Parser/ ~.ORG-FILE-SETTING~
+,**** ~.ORG-FILE~: Phase one
+,*** ~FOOTNOTE-REFERENCE~: it is in a line.
+,*** Org Objects and ~*org-object-parsers*~ : if it is not a character, what is it?
+,*** This is the ~.ORG-LINE~
+,*** ~.MARKUP~: Code (and emphasis and monospace etc)
+,*** ~ORG-SECTION~ and ~ORG-FILE~: Phase Two.
+,**** *examples* 
+,*** TODO 
+,** Weave : make documentation from source code
+,**** Table of contents
+,***** Text
+,****** *Example:*
+,***** HTML 
+,****** ~id~ attribute
+,******* /Function/ ~WHITESPACE-AS-UNDERSCORE~
+,******* /function/ ~UNIQUE-ID~
+,****** ~<OUTLINE-UL/>~
+,**** ~<outline-body/>
+,** Tangle : make code from source document
+,*** :tangle \"../tangle.lisp\"
+,**** The tangle.lisp code block
+,**** :noweb yes
+,*** Parsing the file
+,*** ~.STRING-EQUAL~: For case insensitivity
+,** ~*debug-input*~ and friends.
+,** ~.make-string~
+,** ~.LINE~: many lines make up a document
+,** ~.WHITESPACE~: member of?
+,** ~.ATOM~ 
+,* Development Driven Testing
+,* The Source Code
+,** ~SMUG/PARSE/ORG~
+,** ~SMUG/MAKE~
+,** Testing
+,** ~SMUG/PARSE/OUTLINE~
+,** ~SMUG/WEAVE/HTML~
+,** ~SMUG/WEAVE~
+,** ~SMUG/TANGLE~
+,*** The tangle.lisp file
+,** SMUG/TUTORIAL 
+,*** SMUG/TUTORIAL primitives
+,**** ~RUN~
+,**** ~.FAIL~ and ~.PLUS~
+,**** Monad
+,**** ~.OR~ and ~.NOT~
+,*** The ~INPUT~ interface functions
+,*** The ~PARSER~ itself
+,*** The tutorial.lisp file
+,* COMMENT ~.PROGN~, ~.PROG1~ and ~.PROG2~
+,** ~.PROG1~
+,* Appendix
+,** Release Notes
+,** Task List
+,*** TODO Patch printf.lisp to use this code
+,*** TODO Make ~.line~ and ~.document-line~ merged
+,*** TODO reason for this
+,*** TODO Explain use of ~.first~ in weave
+,*** TODO turn /parser/ into /parse/ for the package names
+,** Org Mode
+,*** `C-c C-x b'     (`org-tree-to-indirect-buffer')
+,*** Emphasis and monospace
+,* Footnotes	 
+"
+#+END_SRC
+
+***** HTML 
+
+What we want is a ~<UL></UL>~ where each ~<li>~ contains an ~<a>~ that
+links to the ~id~ attribute of the heading itself if it is a single
+page html document.
+
+#+NAME: weave-html
+#+BEGIN_SRC lisp
+  (defgeneric html (object &key type)
+    (:method (object &key &allow-other-keys)
+      (<> (:text (princ-to-string object))))
+    (:method ((object list)
+              &key &allow-other-keys)
+      (dolist (item object)
+        (html item))))
+  
+  
+  (import '(smug/parse/org::markup
+            smug/parse/org::markup-text))
+  
+  (defmethod html ((object markup) &key &allow-other-keys)
+    (<> (:text (markup-text object))))
+    
+#+END_SRC
+****** ~id~ attribute
+
+So, each outline needs an ~id~ for the headline in order to anchor there.
+
+#+BEGIN_QUOTE
+3.2.5.1 The id attribute
+
+The id attribute specifies its element's unique identifier (ID). 
+
+The value must be unique amongst all the IDs in the element's home
+subtree and must contain at least one character. The value must not
+contain any space characters.
+
+There are no other restrictions on what form an ID can take; in
+particular, IDs can consist of just digits, start with a digit, start
+with an underscore, consist of just punctuation, etc.
+
+An element's unique identifier can be used for a variety of purposes,
+most notably as a way to link to specific parts of a document using
+fragment identifiers, as a way to target an element when scripting,
+and as a way to style a specific element from CSS.
+
+Identifiers are opaque strings. Particular meanings should not be
+derived from the value of the id attribute.[fn:html5-id]
+#+END_QUOTE
+
+******* /Function/ ~WHITESPACE-AS-UNDERSCORE~
+
+#+name: whitespace-as-underscore
+#+BEGIN_SRC lisp
+  (defun whitespace-as-underscore (string &optional (whitespace '(#\space #\tab)))
+    (labels ((.wau ()
+               (.let* ((chars (.first (.map 'string (.is-not 'member whitespace))))
+                       (whitespace (.optional (.first (.map 'string (.is 'member whitespace)))))
+                       (rest (.optional (.wau))))
+                 (.result (concatenate 
+                           'string chars 
+                           (make-list (length whitespace)
+                                      :initial-element #\_)
+                           rest)))))
+      (remove-if (lambda (i) (find i " ~:+#.!|<>\"()'*,?/`"))
+                 (or (parse (.wau) string)
+                     string))))
+#+END_SRC
+
+#+RESULTS: whitespace-as-underscore
+: WHITESPACE-AS-UNDERSCORE
+
+#+RESULTS:
+: WHITESPACE-AS-UNDERSCORE
+
+#+BEGIN_SRC lisp
+  
+  (whitespace-as-underscore "Another top level headline*")
+  
+  
+#+END_SRC
+
+
+******* /function/ ~UNIQUE-ID~
+
+In order to make each ~id~ unique, we pass around two hashtables. One
+is the ~HEADING-TEXT~ as keys and the ~id~'s as values. The other has
+the ~OUTLINE~ itself as keys with the ~id~ it has as a value. 
+
+#+name: make-id-hashes
+#+BEGIN_SRC lisp
+  (defun make-id-hashes ()
+    (cons (make-hash-table :test #'equal)
+          (make-hash-table :test #'equalp)))
+#+END_SRC
+
+#+RESULTS:
+: MAKE-ID-HASHES
+
+#+name: unique-id
+#+BEGIN_SRC lisp
+  (defparameter *unique-ids* (make-id-hashes))
+  
+  (defun unique-id (outline  
+                    &key (id-hashes *unique-ids*)
+                      (headline (smug/parse/org::org-section-headline outline))
+                      (body (smug/parse/org::org-headline-body headline))
+                      (headline-text 
+                       (let ((body (if (listp body)
+                                       body
+                                       (list body))))
+                         (apply #'concatenate 'string
+                                (mapcar (lambda (i) 
+                                          (typecase i 
+                                            (smug/parse/org::markup
+                                             (smug/parse/org::markup-text i))
+                                            (t i))) 
+                                        body
+                                      )))))
+    (destructuring-bind (text-hash . outline-hash)
+        id-hashes
+      (let* ((unique? (gethash outline outline-hash))
+             (id? (unless unique? (gethash headline-text text-hash)))
+             (id (unless unique? 
+                  (if id? 
+                      (unique-id outline :id-hashes id-hashes 
+                                 :headline-text (concatenate 
+                                                 'string headline-text
+                                                 (smug/parse/org::org-headline-stars headline)))
+                      (whitespace-as-underscore headline-text)))))
+        (or unique?
+            (progn 
+              (push id (gethash headline-text text-hash))
+              (setf (gethash outline outline-hash) id))))))
+        
+    
+#+END_SRC
+
+#+RESULTS: unique-id
+: UNIQUE-ID
+
+#+RESULTS:
+: UNIQUE-ID
+
+
+****** ~<ORG-UL/>~
+#+name: outline-ul
+#+BEGIN_SRC lisp 
+  
+  (defun <org-subsections-ul/> (subs
+                                &key (class "nav sidenav")
+                                     (attributes `(:data-spy "affix" :data-offset-top "10"
+                                                             :data-offset-bottom "20000"))
+                                &aux (unique-ids *unique-ids*))
+    (when subs 
+      (<> `(ul :class ,class ,@attributes)
+        (dolist (sub subs)
+          (<> li 
+            (<> (a :href (concatenate 'string "#"
+                                      (unique-id sub :id-hashes unique-ids)))
+              (html (smug/parse/org::org-headline-body (org-section-headline sub))))
+            (<org-subsections-ul/> (org-section-sections sub) 
+                                   :class "nav" :attributes nil))))))
+  
+#+END_SRC
+
+#+RESULTS: outline-ul
+: <ORG-SUBSECTIONS-UL/>
+
+#+RESULTS:
+: <OUTLINE-UL/>
+
+#+name: weave-outline-ul
+#+BEGIN_SRC lisp :results output code :noweb yes
+  (defun print-outline-ul-to-string ()
+   (<> (:handler (cxml:make-string-sink
+                  :indentation 1
+                  :omit-xml-declaration-p t) 
+                ,#+(or) 
+                (closure-html:make-string-sink))
+    (<outline-ul/> 
+     (parse (.outline) 
+            (subseq 1"
+  <<weave-org-outline-test-text>>")))))
+  
+  
+#+END_SRC
+
+# :noweb yes :tangle "/tmp/foo.lisp"
+#+BEGIN_SRC lisp 
+  (let ((string
+             <<weave-outline-ul()>>))
+   (alexandria:write-string-into-file string
+   #P"/tmp/ul.html"  :if-exists :supersede))
+#+END_SRC
+
+**** ~<org-body/>
+
+#+NAME: org-body
+#+BEGIN_SRC lisp
+    
+  (import '(smug/parse/org::org-document-body
+            smug/parse/org::org-file
+            smug/parse/org::org-document-settings
+            smug/parse/org::setting-name
+            smug/parse/org::setting-words))
+  
+  (defun <org-document-body/> (org)
+    (let* ((body (org-document-body org))
+           (title (find :title (org-document-settings org) 
+                        :key 'setting-name 
+                        :test #'string-equal)))
+           ;; (headline (org-headline org))
+           ;; (stars (when headline (headline-stars headline)))
+           ;; (level (length stars))
+           ;; (class (format nil "~R-star~:P" level)))    
+      (<> (div :class "class")
+        ,#+(or)(when headline
+         (<> `(,(concatenate 
+                'string "h" (princ-to-string
+                             (if (zerop level)
+                                 1
+                                 (apply #'min (list level 6)))))
+               :class ,class)
+          (<> (:text (headline-text headline)))))
+        (<> h1 (<> (:text (setting-words title))))
+        (<org-body/> body))))
+  
+  (defun <org-body/> (body)
+    (<> (div :class "org-body")
+      (<org-<p>s> body)))
+  
+  
+  (import '(smug/parse/org::org-section
+            smug/parse/org::org-section-headline
+            smug/parse/org::org-section-body
+            smug/parse/org::org-section-sections
+            smug/parse/org::org-document-sections
+            smug/parse/org::org-headline-stars
+            smug/parse/org::org-headline-body))
+  
+  
+  (defun <org-section/> (section)
+    (let* ((body (org-section-body section))
+           (title (org-section-headline section))
+           (length (1+ (min 6 (length (org-headline-stars title)))))
+           (h? (concatenate 
+                'string "h"
+                (princ-to-string length)))
+           (id (unique-id section :id-hashes *unique-ids*)))
+      (<> (div :class "org-section" :id id)
+        (<> `(,h? ,@(when (= length 2)
+                      (list :class "page-header")))
+          (<org-html> (org-headline-body title)))
+        (<org-body/> body)
+        (dolist (sec (org-section-sections section))
+          (<org-section/> sec)))))
+    
+      
+  
+#+END_SRC
+
+#+RESULTS: org-body
+: <ORG-BODY/>
+
+#+name: weave-outline-body-test
+#+BEGIN_SRC lisp :results output code :noweb yes
+  (<> (:handler (cxml:make-string-sink
+                  :indentation 1
+                  :omit-xml-declaration-p t) 
+                ,#+(or) 
+                (closure-html:make-string-sink))
+    (<outline-body/> 
+     (parse (.outline) 
+           "
+  <<weave-org-outline-test-text>>")))
+  
+  
+#+END_SRC
+
+#+RESULTS: weave-outline-body-test
+#+BEGIN_SRC lisp
+
+"<div class=\"zero-stars\">
+ This is the title by default. This is a sentence thingie.
+ <div class=\"one-star\">
+  <h1 class=\"one-star\">
+   Top level headline</h1>
+  <div class=\"two-stars\">
+   <h2 class=\"two-stars\">
+    Second level</h2>
+   <div class=\"three-stars\">
+    <h3 class=\"three-stars\">
+     3rd level</h3>
+    some text
+   </div>
+   <div class=\"three-stars\">
+    <h3 class=\"three-stars\">
+     3rd level</h3>
+    more text
+   </div>
+  </div>
+ </div>
+ <div class=\"one-star\">
+  <h1 class=\"one-star\">
+   Another top level headline</h1>
+ </div>
+</div>"
+#+END_SRC
+
+**** ~<outline-body/>
+
+#+BEGIN_SRC lisp
+    
+  (defun <outline-body/> (outline)
+    (let* ((subs (outline-sub-outlines outline))
+           (headline (outline-headline outline))
+           (stars (when headline (headline-stars headline)))
+           (level (length stars))
+           (class (format nil "~R-star~:P" level)))
+      (<> (div :class class)
+        (when headline
+         (<> `(,(concatenate 
+                'string "h" (princ-to-string
+                             (if (zerop level)
+                                 1
+                                 (apply #'min (list level 6)))))
+               :class ,class)
+          (<> (:text (headline-text headline)))))
+                    (<> (:text (or (outline-text outline) "")))
+          (dolist (sub subs) (<outline-body/> sub)))))
+  
+#+END_SRC
+
+#+name: weave-outline-body-test
+#+BEGIN_SRC lisp :results output code :noweb yes
+  (<> (:handler (cxml:make-string-sink
+                  :indentation 1
+                  :omit-xml-declaration-p t) 
+                ,#+(or) 
+                (closure-html:make-string-sink))
+    (<outline-body/> 
+     (parse (.outline) 
+           "
+  <<weave-org-outline-test-text>>")))
+  
+  
+#+END_SRC
+
+#+RESULTS: weave-outline-body-test
+#+BEGIN_SRC lisp
+
+"<div class=\"zero-stars\">
+ This is the title by default. This is a sentence thingie.
+ <div class=\"one-star\">
+  <h1 class=\"one-star\">
+   Top level headline</h1>
+  <div class=\"two-stars\">
+   <h2 class=\"two-stars\">
+    Second level</h2>
+   <div class=\"three-stars\">
+    <h3 class=\"three-stars\">
+     3rd level</h3>
+    some text
+   </div>
+   <div class=\"three-stars\">
+    <h3 class=\"three-stars\">
+     3rd level</h3>
+    more text
+   </div>
+  </div>
+ </div>
+ <div class=\"one-star\">
+  <h1 class=\"one-star\">
+   Another top level headline</h1>
+ </div>
+</div>"
+#+END_SRC
+
+** Tangle : make code from source document
+
+
+#+name: tangle_code-blocks-variable
+#+BEGIN_SRC lisp  
+  (defparameter *code-blocks* 
+    (org-code-blocks (merge-pathnames 
+                      "doc/tutorial.org" 
+                      (asdf:system-source-directory :smug))))  
+#+END_SRC
+
+Now, what the org manual[fn:org-src] either does not mention, or I
+simply cannot find it, is the space prefix or identation of the code
+block itself.
+
+In other words, when tangling, the indentation from the start of a
+code block is removed.
+
+The manual does mention indentation, but it does not quite describe the behavoiur. 
+
+#+BEGIN_QUOTE
+- org-src-preserve-indentation :: By default, the value is nil, which
+     means that when code blocks are evaluated during export or
+     tangled, they are re-inserted into the code block, which may
+     replace sequences of spaces with tab characters. When non-nil,
+     whitespace in code blocks will be preserved during export or
+     tangling, exactly as it appears. This variable is especially
+     useful for tangling languages such as Python, in which whitespace
+     indentation in the output is critical.
+#+END_QUOTE
+
+What happens is quite simple. When a code block is indented, and then
+code itself has indentation inside it, the shared whitespace prefix
+for all the lines is removed.
+
+So, we have the following.
+
+#+name: org-indent
+#+BEGIN_SRC org :tangle "/tmp/yay.org"
+    
+  ,#+BEGIN_SRC lisp :tangle "/tmp/yay.lisp"
+      (progn 
+        (format t "yay!")
+        (format t "yay!"))        
+  ,#+END_SRC
+    
+#+END_SRC
+
+If it is not obvious, there is a "  " prefix before "(progn ...)". Yet,
+when tangled, they have the common space prefix removed.
+
+#+BEGIN_SRC lisp :results output code
+  (alexandria:read-file-into-string #P"/tmp/yay.lisp")  
+#+END_SRC
+=>
+
+#+BEGIN_SRC lisp
+
+"
+(progn 
+  (format t \"yay!\")
+  (format t \"yay!\"))
+"
+#+END_SRC
+
+Not only is there no indentation prefix, but there are two
+~#\Newline~'s added as well.
+
+The ~#\Newline~'s are actually ~:padline~'s, which will be dealt with
+later. But, we do have to trim the whitespace, and use ~SMUG~ to do it.
+
+#+name: tangle_whitespace-prefix
+#+BEGIN_SRC lisp
+  (defun whitespace-prefix-number (lines)
+    (let ((nums (loop :for line 
+                   :in (remove "" lines  :test #'string=)
+                   :collect (caar (run (.let* ((ws (.whitespace :at-least 0)))
+                                          (.result (length ws))) line)))))
+     (if nums 
+         (apply #'min nums) 
+         0)))
+    
+  (defun whitespace-prefix-trim (lines)
+    (let ((num (whitespace-prefix-number lines)))
+      (mapcar (lambda (l) (if (string= "" l)
+                              l
+                              (subseq l num)))
+                      lines)))
+#+END_SRC
+
+#+RESULTS: tangle_whitespace-prefix
+: WHITESPACE-PREFIX-TRIM
+
+#+BEGIN_SRC lisp :noweb yes :results output code                            
+  (let* ((code-block-string
+         (symbol-name '#:|
+  <<org-indent>>|))
+         (code-block (first (org-code-blocks code-block-string))))
+    (list (whitespace-prefix-number (code-block-body code-block))
+          (whitespace-prefix-trim (code-block-body code-block))))
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC lisp
+
+(4 ("(progn " "  (format t \"yay!\")" "  (format t \"yay!\"))        "))
+#+END_SRC
+
+=>
+#+BEGIN_SRC lisp
+
+(4 ("(progn " "  (format t \"yay!\")" "  (format t \"yay!\"))        "))
+#+END_SRC
+
+*** :tangle "../tangle.lisp"
+
+Somewhere in this file is a line that resembles the following.
+
+#+BEGIN_SRC org
+  ,#+BEGIN_SRC lisp :noweb yes :tangle "../tangle.lisp" :padline no  
+#+END_SRC
+
+What we care about right now is the header arguments, and in specific
+the :tangle keyword.
+
+In [[%3D<header%20arguments>%3D][~<header arguments>~]] we set the ~CODE-BLOCK-HEADER-ARGUMENTS~ to an
+~ALIST~ if it parses as such, and a ~.LINE~ otherwise. We really only
+care about the ~ALIST~, and besides, it really is a ~PLIST~ after all,
+so ~GETF-CODE-BLOCK~ is a decent name.
+
+#+name: tangle_getf-code-block
+#+BEGIN_SRC lisp
+  (defun getf-code-block (cb indicator)
+    (let* ((db (code-block-header-arguments cb))
+           (value (when (listp db) (assoc indicator db :test 'string-equal))))
+      (values (cdr value) (car value))))
+#+END_SRC
+
+So, in specific, we are looking for the ~|:tangle "../tangle.lisp"|~
+header argument, as that one code block that makes this a literate
+/program/.
+
+#+name: tangle_code-blocks-with-tangle
+#+BEGIN_SRC lisp
+  (defun code-blocks-with-tangle (&optional (code-blocks *code-blocks*))
+    (remove-if-not (lambda (cb) (getf-code-block cb "tangle"))
+                   code-blocks))
+#+END_SRC
+
+#+RESULTS: tangle_code-blocks-with-tangle
+: CODE-BLOCKS-WITH-TANGLE
+
+**** The tangle.lisp code block
+
+#+name: tangle_tangle-code-block
+#+BEGIN_SRC lisp :results output code
+  (find-if (lambda (cb) 
+             (string-equal "../tangle.lisp" 
+                           (read-from-string (getf-code-block cb "tangle"))))
+           (code-blocks-with-tangle))
+  
+#+END_SRC
+
+#+RESULTS: tangle_tangle-code-block
+#+BEGIN_SRC lisp
+
+#S(CODE-BLOCK
+   :NAME NIL
+   :LANGUAGE "lisp"
+   :SWITCHES NIL
+   :HEADER-ARGUMENTS (("noweb" . "yes ") ("tangle" . "\"../tangle.lisp\" ")
+                      ("padline" . "no"))
+   :BODY ("  (defpackage :smug/tangle" "    (:use :cl :smug/tutorial)"
+          "    (:export))" "  (in-package :smug/tangle) " ""
+          "  <<tangle_.line>>" "" "  <<tangle_whitespace>>" ""
+          "  <<tangle_.atom>>" "" "  <<tangle_whitespace-prefix>>" "  "
+          "  <<tangle_code-block-switches>>" ""
+          "  <<tangle_code-block-header-arguments>>" ""
+          "  <<tangle_.code-block-plist>>" "" "  <<tangle_.code-block>>" ""
+          "  <<tangle_getf-code-block>>" "" "  <<tangle_org-code-blocks>>" ""
+          "  <<tangle_code-blocks-variable>>" ""
+          "  <<tangle_code-blocks-with-tangle>>" ""
+          "  <<tangle_code-block-noweb-body>>" "" "  <<tangle_.noweb>>"))
+#+END_SRC
+
+
+=>
+#+BEGIN_SRC lisp
+
+#S(CODE-BLOCK
+   :NAME NIL
+   :LANGUAGE "lisp"
+   :SWITCHES NIL
+   :HEADER-ARGUMENTS (("noweb" . "yes ") ("tangle" . "\"../tangle.lisp\" ")
+                      ("padline" . "no"))
+   :BODY ("  (defpackage :smug/tangle" "    (:use :cl :smug/tutorial)"
+          "    (:export))" "  (in-package :smug/tangle) " ""
+          "  <<tangle_.line>>" "" "  <<tangle_whitespace>>" ""
+          "  <<tangle_.atom>>" "" "  " "  <<tangle_code-block-switches>>" ""
+          "  <<tangle_code-block-header-arguments>>" ""
+          "  <<tangle_.code-block-plist>>" "" "  <<tangle_.code-block>>" ""
+          "  <<tangle_getf-code-block>>" "" "  <<tangle_org-code-blocks>>" ""
+          "  <<tangle_code-blocks-variable>>" ""
+          "  <<tangle_code-blocks-with-tangle>>"))
+#+END_SRC
+
+**** :noweb yes
+
+The ~tangle.lisp~ code block has a ~:noweb yes~ header argument.
+
+#+BEGIN_SRC lisp
+  :HEADER-ARGUMENTS (("noweb" . "yes ") ("tangle" . "\"../tangle.lisp\" ")
+                     ("padline" . "no"))
+#+END_SRC
+
+#+BEGIN_QUOTE
+The :noweb header argument controls expansion of “noweb” syntax
+references (see Noweb reference syntax) when the code block is
+evaluated, tangled, or exported. The :noweb header argument can have
+one of the five values: no, yes, tangle, or no-export strip-export.
+
+ - no :: The default. “Noweb” syntax references in the body of the
+         code block will not be expanded before the code block is
+         evaluated, tangled or exported.
+
+ - yes :: “Noweb” syntax references in the body of the code block will
+          be expanded before the code block is evaluated, tangled or
+          exported.
+
+ - tangle :: “Noweb” syntax references in the body of the code block
+             will be expanded before the code block is
+             tangled. However, “noweb” syntax references will not be
+             expanded when the code block is evaluated or exported.
+
+ - no-export :: “Noweb” syntax references in the body of the code
+                block will be expanded before the block is evaluated
+                or tangled. However, “noweb” syntax references will
+                not be expanded when the code block is exported.
+
+ - strip-export :: “Noweb” syntax references in the body of the code
+                   block will be expanded before the block is
+                   evaluated or tangled. However, “noweb” syntax
+                   references will be removed when the code block is
+                   exported.
+ - eval :: “Noweb” syntax references in the body of the code block
+           will only be expanded before the block is evaluated.
+ -- http://orgmode.org/org.html#noweb
+#+END_QUOTE
+
+In the code block we are trying to tangle, the “Noweb” syntax
+references in the body of the code block will be expanded before the
+code block is tangled. 
+
+Looking at [[*The%20tangle.lisp%20code%20block][the tangle.lisp code block]], we do indeed have a tonne.
+
+
+
+*** Parsing the file
+
+#+NAME: tangle_org-code-blocks
+#+BEGIN_SRC lisp
+  
+  ;; #+quicklisp (ql:quickload "alexandria")
+  
+  (defun org-code-blocks (org-doc)
+    (let ((string 
+           (etypecase org-doc
+             (string org-doc)
+             (pathname (alexandria:read-file-into-string org-doc)))))
+      (destructuring-bind ((list . input))
+          (run (.first (.map 'list (.or (.code-block) (.line)))) string)
+        (values (remove-if-not #'code-block-p list) input))))
+   
+  
+#+END_SRC
+
+#+RESULTS:
+: ORG-CODE-BLOCKS
+
+
+*** ~.STRING-EQUAL~: For case insensitivity
+
+#+BEGIN_QUOTE
+Org uses option keywords (like #+TITLE to set the title) and
+environment keywords (like #+BEGIN\_HTML to start a HTML
+environment). They are written in uppercase in the manual to enhance
+its readability, but you can use lowercase in your Org files.
+-- http://orgmode.org/org.html#Conventions
+
+#+END_QUOTE
+
+The ~#+NAME~, ~#+BEGIN_SRC~ and ~#+END_SRC~ are case insensitive. We have
+~.CHAR~~ and ~.STRING=~ already, so ~.CHAR-EQUAL~ and ~.STRING-EQUAL~
 are in order[fn:f_chareq].
 
 #+NAME: tutorial_.char-equal
 #+BEGIN_SRC lisp
   (defun .char-equal (char)
-    (.is #'char-equal char))
+    (.is #'cl:char-equal char))
 #+END_SRC
 
-For our =.STRING=, we simply return the string we passed in. Because
-=CL:STRING-EQUAL= "ignore[s] differences in case"[fn:f_chareq], we
+For our ~.STRING=~, we simply return the string we passed in. Because
+~CL:STRING-EQUAL~ "ignore[s] differences in case"[fn:f_chareq], we
 actually need to return that matched string from what we are parsing.
 
 #+NAME: tutorial_.string-equal
 #+BEGIN_SRC lisp  
   (defun .string-equal (string)
     (labels ((%string-equal (string)
-               (if (input-empty-p string)
-                   (.result nil)
-                   (.let* ((first (.char-equal (input-first string)))
-                           (rest (%string-equal (input-rest string))))
-                     (.result (cons first rest))))))
+               (.let* ((first (.char-equal (aref string 0)))
+                       (rest (if (> (length string) 1)
+                                    (%string-equal (subseq string 1))
+                                    (.result nil))))
+                 (.result (cons first rest)))))
       (.let* ((list (%string-equal string)))
         (.result (coerce list 'string)))))
 #+END_SRC
 
+#+RESULTS: tutorial_.string-equal
+: \.STRING-EQUAL
+
 #+BEGIN_SRC lisp
    (test> 
-    (.run (.string-equal "asd") "AsD") 
-    :=> (("AsD" . "")))   
+    (run (.string-equal "asd") "AsD") 
+     => (("AsD" . "")))   
 #+END_SRC
 
+#+RESULTS:
+: T
 
 
-*** =.switches= 
+** Export : weave/tangle... whatever.
 
-#+BEGIN_QUOTE
+*** ~<html> ... </html>~
 
-Both in example and in src snippets, you can add a -n switch to
-the end of the BEGIN line, to get the lines of the example
-numbered. 
+http://tutsme-webdesign.info/bootstrap-3-affix/
 
-If you use a +n switch, the numbering from the previous
-numbered snippet will be continued in the current one. 
+#+name: export-html
+#+BEGIN_SRC lisp :noweb yes
+  (import 'yasexml:<>)
+  
+  (let ((highlight 
+  "HighlightLisp.highlight_drewc = HighlightLisp.highlight_element;
+  
+  HighlightLisp.highlight_element = function(code_el)
+   {  
+    this.highlight_drewc(code_el);
+    var html = code_el.innerHTML;
+    html = html.replace(/<(?!\\/span>|span(.*)>)/g, '&lt;');
+    // html = html.replace(/(?!span)>/g, '&amp;');
+    /* html = html.replace(/(?!<span)>/g, '&gt;'); */
+   //     console.log(html);
+    code_el.innerHTML = html;
+   };
 
-In literal
-examples, Org will interpret strings like ‘(ref:name)’ as labels,
-and use them as targets for special hyperlinks like
-[[(name)]] (i.e., the reference name enclosed in single
-parenthesis). In HTML, hovering the mouse over such a link will
-remote-highlight the corresponding code line, which is kind of
-cool.
+function isElementVisible(elementToBeChecked)
+{
+    var TopView = $(window).scrollTop();
+    var BotView = TopView + $(window).height();
+    var TopElement = $(elementToBeChecked).offset().top;
+    var BotElement = TopElement + $(elementToBeChecked).height();
+    return ((BotElement <= BotView) && (TopElement >= TopView));
+}
 
-You can also add a -r switch which removes the labels from the
-source code121. With the -n switch, links to these references
-will be labeled by the line numbers from the code listing,
-otherwise links will use the labels with no parentheses. Here is
-an example:
+function make_it_so(thing)
+{
+  var li_for_nav = thing.target;
+  var nav = thing.currentTarget;
 
-     ,#+BEGIN_SRC emacs-lisp -n -r
-     (save-excursion                  (ref:sc)
-        (goto-char (point-min)))      (ref:jump)
-     ,#+END_SRC
-     In line [[(sc)]] we remember the current position.  [[(jump)][Line (jump)]]
-     jumps to point-min.
+  if (!isElementVisible(li_for_nav)) 
+  {
+   var href=$( li_for_nav ).find('a')[0].hash;
+   var section = $(href)[0];
 
-If the syntax for the label format conflicts with the language syntax,
-use a -l switch to change the format, for example
-   ‘#+BEGIN_SRC pascal -n -r -l "((%s))"’. See also the variable org-coderef-label-format.
-#+END_QUOTE
+   var link_top = $( li_for_nav ).offset().top;
+   var section_top = $( section ).offset().top;
+   var nav_top = $( nav ).offset().top 
 
-#+NAME: tutorial_code-block-switches
-#+BEGIN_SRC lisp
-  (.map 'list (.let* ((symbol (.is 'find "+-"))
+   var new_nav_top = (nav_top + $(window).height()) - section_top;
    
-                (.result symbol)))
-                                       
-#+END_SRC
+   $( nav ).css('position', 'fixed');
+   $( nav ).css('top', '50px');
+   
+     
 
-*** =.code-block= : Phase 1
 
-#+BEGIN_SRC lisp
-  (defun .code-block-plist ()
-    (flet ((.begin 
-               (.prog2 (.string-equal "#+BEGIN_SRC ")
-                       (.let* ((language 
-                                (.map 'string (.is-not 'member '(#\Space #\Newline))))
-                               (sep (.item)))
-            (src (.prog1 (.string-of (.item))
-                         (.string-equal "#+END_SRC"))))
-      (.result (list :name name
-                     :language language
   
-                     :src src))))
-    (.let* ((name (.prog2 (.string-equal "#+NAME: ")
-                          (.map 'string (.item))
-                          (.char= #\Newline)))
-            (begin 
-#+END_SRC
+  } else { 
+  console.log('active')
+  }
+}
 
-#+BEGIN_SRC lisp
-  (let ((string "#+NAME: <name>
-  ,#+BEGIN_SRC <language> <switches> <header arguments>
-    <body>
-  ,#+END_SRC     "))
-         (test> (.run (.code-block-plist) string)
-                => (((:NAME "<name>" 
-                      :BEGIN "<language> <switches> <header arguments>" 
-                      :SRC "  <body>
-  ")
-    . "     "))))
+$('#affix-nav').on('activate.bs.scrollspy', function (event) {
+ // console.log(event);  
+ make_it_so(event);
+
+})
+
+
+
+"))
+    (defun <script-highlight-body/> ()
+    (<> (script) (<> (:text highlight)))
+      (<> (script) (<> (:text "HighlightLisp.highlight_auto();")))))
+  
+  
+  
   
 #+END_SRC
 
+#+name: export-html
+#+BEGIN_SRC lisp :noweb yes
+  (import 'yasexml:<>)
+    
+  (defmethod yasexml:call-with-tag (fn (tag (eql 'html)) &rest args)
+    (apply #'<html/> (lambda () (funcall fn tag)) args))
+    
+  (let ((highlight 
+  "HighlightLisp.highlight_drewc = HighlightLisp.highlight_element;
+  
+  HighlightLisp.highlight_element = function(code_el)
+   {  
+    this.highlight_drewc(code_el);
+    var html = code_el.innerHTML;
+    html = html.replace(/<(?!\\/span>|span(.*)>)/g, '&lt;');
+    // html = html.replace(/(?!span)>/g, '&amp;');
+    /* html = html.replace(/(?!<span)>/g, '&gt;'); */
+    console.log(html);
+    code_el.innerHTML = html;
+   };"))
+    (defun <script-highlight-body/> ()
+    (<> (script) (<> (:text highlight)))
+      (<> (script) (<> (:text "HighlightLisp.highlight_auto();")))))
+  
+  
+  (defun <html/> (thunk &key (title "SMUG") 
+                          (style "
+    .header {
+      
+      top: 0;
+      width: 100%;
+      height:30%; overflow:scroll;
+      max-height: 50%;
+      background-color: #f5f5f5;
+   }
+  
+  ul.affix {
+          position: fixed; 
+          top: 0px;
+          left: 62px;
+          width: 250px; 
+  }
+  ul.affix-top {
+          position: static;
+  }
+  ul.affix-bottom {
+          position: absolute;
+  }
+  
+  /* First level of nav */
+  .sidenav {
+    margin-top: 30px;
+    margin-bottom: 30px;
+    padding-top:    10px;
+    padding-bottom: 10px;
+    background-color: #f7f5fa;
+    border-radius: 5px;
+  }
+  
+  /* All levels of nav */
+  .sidebar .nav > li > a {
+    display: block;
+    color: #716b7a;
+    padding: 5px 20px;
+  }
+  .sidebar .nav > li > a:hover,
+  .sidebar .nav > li > a:focus {
+    text-decoration: none;
+    background-color: #e5e3e9;
+  }
+  .sidebar .nav > .active > a,
+  .sidebar .nav > .active:hover > a,
+  .sidebar .nav > .active:focus > a {
+    font-weight: bold;
+    color: #563d7c;
+    background-color: transparent;
+  }
+  
+  /* Nav: second level */
+  .sidebar .nav .nav {
+          display: none;
+  }
+  .sidebar .nav > li.active .nav {
+          display:block;
+  }
+  .sidebar .nav .nav {
+    margin-bottom: 8px;
+  }
+  .sidebar .nav .nav > li > a {
+    padding-top:    3px;
+    padding-bottom: 3px;
+    padding-left: 30px;
+    font-size: 90%;
+  }
+   .sidebar .nav > .active > a,
+  .sidebar .nav > .active:hover > a,
+  .sidebar .nav > .active:focus > a {
+    font-weight: bold;
+    color: #563d7c;
+    background-color: transparent;
+   "))
+    (<> (:unescaped "<!DOCTYPE html>" #\Newline))
+    (<> ("html" :lang "en")
+      (<> head
+        (<> title (<> (:text title)))
+        (<> (:unescaped '|
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script type="text/javascript" src="http://orthecreedence.github.io/highlight-lisp/js/highlight-lisp/highlight-lisp.js"></script>
+    <link rel="stylesheet" id="hl-theme" href="http://orthecreedence.github.io/highlight-lisp/js/highlight-lisp/themes/github.css">
+    <<bootstrap-cdn>>|))
+        (<> style (<> (:text style))))
+      (<> (body :data-spy "scroll" :data-target "#affix-nav")
+        (funcall thunk)
+        (<script-highlight-body/>)
+        )))
+  
+#+END_SRC
+
+#+RESULTS: export-html
+: <SCRIPT-HIGHLIGHT-BODY/>
+
+#+RESULTS:
+: <HTML>
+
+*** bootstrap CDN
+
+#+name: bootstrap-cdn
+#+BEGIN_SRC html 
+  <!-- Latest compiled and minified CSS -->
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.0/css/bootstrap.min.css">
+  
+  <!-- Optional theme -->
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.0/css/bootstrap-theme.min.css">
+ 
+  <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+  <script src="http://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script> 
+  <!-- Latest compiled and minified JavaScript -->
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.0/js/bootstrap.min.js"></script>
+
+ 
+#+END_SRC
+
+*** TODO ~<org-<p>s>~
+
+
+#+BEGIN_SRC lisp
+  (defun <org-<p>s> (body)
+    (<> div 
+      (let ((things (loop for item in (if (listp body) body (list body))
+                 :collect (typecase item 
+                            ((or string markup footnote-reference)
+                             (<> (:handler (chtml:make-string-sink))
+                               (<org-html> item)))
+                            (t item))
+                 :into list
+                     :finally (return (loop-and-concatenate list t)))))
+      (loop for thing in things
+         :collect (if (stringp thing)
+                      (let* ((list (split-sequence:split-sequence #\Newline thing))
+                             (ps (split-sequence:split-sequence "" list :test #'string=)))
+                        (dolist (p ps) (when p (<> p (<> `(:unescaped ,@p))))))
+                      (<org-html> thing))))))
+#+END_SRC
+*** test
+
+http://getbootstrap.com/javascript/#affix
+
+#+BEGIN_SRC lisp
+  (<> html 
+    (<> (div :class "container")
+      (<> (div :class "col-md-9")
+        (<> "foo"))
+      (<> (div :class "col-md-3")
+        (<> "nav"))))  
+#+END_SRC
+
+#+BEGIN_SRC lisp
+  (defun test () 
+    (let ((org-file (org-document (merge-pathnames 
+                                   "doc/tutorial.org" 
+                                   (asdf:system-source-directory :smug)))))
+      (with-open-file (s #P"/tmp/foobar.html"  :direction :output :if-exists :supersede)
+        (<> (:handler (chtml:make-character-stream-sink s))
+          (<> html 
+            (<> (div :class "container")
+              (<> (div :class "row")
+  
+                (<> (nav :class "sidebar col-md-3" :id "affix-nav")
+  
+  ;;; TODO this should be this document and not the make: but the ul does not work for affix otherwise... why?
+                  (let* ((org (smug/parse/org::org-file smug/make:*TUTORIAL-OUTLINE*))
+                         (sections (smug/parse/org::org-file-sections org)))
+                    (<org-subsections-ul/> 
+                     (org-document-sections org-file)#+(or) sections)))
+                (<> (div :class "col-md-9")
+                  (<org-document-body/> org-file)
+                (<> (div :class "org-sections")
+                  (dolist (sec (org-document-sections org-file))
+                    (<org-section/> sec))))
+                                 
+  )))))
+  
+    org-file))
+  
+  
+  (let ((org-file (org-document (merge-pathnames 
+                                       "doc/tutorial.org" 
+                                       (asdf:system-source-directory :smug)))))
+    (with-open-file (s #P"/tmp/foo.html"  :direction :output :if-exists :supersede)
+      (<> (:handler (chtml:make-character-stream-sink s))
+        (<> html 
+          (<> (div :class "container")
+            (<> (div :class "col-md-9")
+              (<org-body/> org-file))
+            (<> (div :class "col-md-3")
+              (let* ((org (smug/parse/org::org-file smug/make:*TUTORIAL-OUTLINE*))
+                     (sections (smug/parse/org::org-file-sections org)))
+                (<org-subsections-ul/> sections))))))))
+  
+  
+  ;; <div class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix-top" role="complementary">
+  ;;             <ul class="nav bs-docs-sidenav">
+                
+  ;;                 <li class="">
+  ;;   <a href="#js-overview">Overview</a>
+  ;;   <ul class="nav">
+  ;;     <li class=""><a href="#js-individual-compiled">Individual or compiled</a></li>
+  ;;     <li class=""><a href="#js-data-attrs">Data attributes</a></li>
+  ;;     <li class=""><a href="#js-programmatic-api">Programmatic API</a></li>
+  ;;     <li class=""><a href="#js-noconflict">No conflict</a></li>
+  ;;     <li class=""><a href="#js-events">Events</a></li>
+  ;;     <li class=""><a href="#js-disabled">When JavaScript is disabled</a></li>
+  ;;     <li><a href="#callout-third-party-libs">Third-party libraries</a></li>
+  ;;   </ul>
+  ;; </li>
+  ;; <li><a href="#transitions">Transitions</a></li>
+  ;; <li>
+  ;;   <a href="#modals">Modal</a>
+  ;;   <ul class="nav">
+  ;;     <li><a href="#modals-examples">Examples</a></li>
+  ;;     <li><a href="#modals-sizes">Sizes</a></li>
+  ;;     <li><a href="#modals-remove-animation">Remove animation</a></li>
+  ;;     <li><a href="#modals-related-target">Varying content based on trigger button</a></li>
+  ;;     <li><a href="#modals-usage">Usage</a></li>
+  ;;   </ul>
+  ;; </li>
+  ;; <li>
+  ;;   <a href="#dropdowns">Dropdown</a>
+  ;;   <ul class="nav">
+  ;;     <li><a href="#dropdowns-examples">Examples</a></li>
+  ;;     <li><a href="#dropdowns-usage">Usage</a></li>
+  ;;   </ul>
+  ;; </li>
+  ;; <li>
+  ;;   <a href="#scrollspy">Scrollspy</a>
+  ;;   <ul class="nav">
+  ;;     <li><a href="#scrollspy-examples">Examples</a></li>
+  ;;     <li><a href="#scrollspy-usage">Usage</a></li>
+  ;;   </ul>
+  ;; </li>
+  ;; <li>
+  ;;   <a href="#tabs">Tab</a>
+  ;;   <ul class="nav">
+  ;;     <li><a href="#tabs-examples">Examples</a></li>
+  ;;     <li><a href="#tabs-usage">Usage</a></li>
+  ;;   </ul>
+  ;; </li>
+  ;; <li>
+  ;;   <a href="#tooltips">Tooltip</a>
+  ;;   <ul class="nav">
+  ;;     <li><a href="#tooltips-examples">Examples</a></li>
+  ;;     <li><a href="#tooltips-usage">Usage</a></li>
+  ;;   </ul>
+  ;; </li>
+  ;; <li>
+  ;;   <a href="#popovers">Popover</a>
+  ;;   <ul class="nav">
+  ;;     <li><a href="#popovers-examples">Examples</a></li>
+  ;;     <li><a href="#popovers-usage">Usage</a></li>
+  ;;   </ul>
+  ;; </li>
+  ;; <li>
+  ;;   <a href="#alerts">Alert</a>
+  ;;   <ul class="nav">
+  ;;     <li><a href="#alerts-examples">Examples</a></li>
+  ;;     <li><a href="#alerts-usage">Usage</a></li>
+  ;;   </ul>
+  ;; </li>
+  ;; <li>
+  ;;   <a href="#buttons">Button</a>
+  ;;   <ul class="nav">
+  ;;     <li><a href="#buttons-stateful">Stateful</a></li>
+  ;;     <li><a href="#buttons-single-toggle">Single toggle</a></li>
+  ;;     <li><a href="#buttons-checkbox-radio">Checkbox / Radio</a></li>
+  ;;     <li><a href="#buttons-methods">Methods</a></li>
+  ;;   </ul>
+  ;; </li>
+  ;; <li>
+  ;;   <a href="#collapse">Collapse</a>
+  ;;   <ul class="nav">
+  ;;     <li><a href="#collapse-examples">Examples</a></li>
+  ;;     <li><a href="#collapse-usage">Usage</a></li>
+  ;;   </ul>
+  ;; </li>
+  ;; <li>
+  ;;   <a href="#carousel">Carousel</a>
+  ;;   <ul class="nav">
+  ;;     <li><a href="#carousel-examples">Examples</a></li>
+  ;;     <li><a href="#carousel-usage">Usage</a></li>
+  ;;   </ul>
+  ;; </li>
+  ;; <li class="">
+  ;;   <a href="#affix">Affix</a>
+  ;;   <ul class="nav">
+  ;;     <li class=""><a href="#affix-examples">Examples</a></li>
+  ;;     <li class=""><a href="#affix-usage">Usage</a></li>
+  ;;   </ul>
+  ;; </li>
+  
+                
+  ;;             </ul>
+  ;;             <a class="back-to-top" href="#top">
+  ;;               Back to top
+  ;;             </a>
+              
+  ;;             <a href="#" class="bs-docs-theme-toggle" role="button">
+  ;;               Preview theme
+  ;;             </a>
+              
+  ;;           </div>
+#+END_SRC
+
+** ~*debug-input*~ and friends.
+
+This is the first real parser. One of the things about the
+non-determinism is that things get FUBAR'd.
+
+#+BEGIN_SRC lisp
+
+ (defun .break (&optional datum &rest arguments)
+    (lambda (i) (let ((args (nreverse (cons i (reverse arguments)))))
+                  (.result (apply #'break (concatenate 'string datum "~%~W") args)))))
+
+  (defparameter *debug-input* (make-hash-table :test #'equal))
+  
+  (defmethod input-first :before (input)
+  #+(or)
+    (let ((num (gethash input *debug-input*)))
+      (when (and num (> num 10))
+        (break "~A times we've tried ~W" num input))
+      (setf (gethash input *debug-input*) (1+ (or num 0)))))
+    
+#+END_SRC
+
+#+RESULTS:
+: #<STANDARD-METHOD INPUT-FIRST :BEFORE (T) {100E18EC83}>
+
+** ~.make-string~
+
+#+BEGIN_SRC lisp
+
+
+
+#+END_SRC
+** ~.LINE~: many lines make up a document
+
+With all the parsers needed defined, a ~.LINE~ is trivial. 
+
+#+name: tangle_.line
+#+BEGIN_SRC lisp
+  (defun .line ()
+    (.prog1 (.map 'string (.is-not 'char= #\newline) :at-least 0)
+            (.char= #\newline)))
+#+END_SRC
+
+#+RESULTS: tangle_.line
+: \.LINE
+
+** ~.WHITESPACE~: member of?
+
+#+name: tangle_whitespace
+#+BEGIN_SRC lisp
+  (defparameter *whitespace* '(#\space #\tab))
+  
+  (defun .whitespace (&key (result-type 'string) (at-least 1))
+    (.map result-type (.is 'member *whitespace*) :at-least at-least))
+#+END_SRC
+
+#+RESULTS: tangle
+: \.WHITESPACE
+
+#+RESULTS: tangle_whitespace
+: \.WHITESPACE
+
+
+#+BEGIN_SRC lisp :results output code
+(test> (run (.whitespace) (format nil "~t asd"))
+      => (("  " . "asd") (" " . " asd")))
+
+#+END_SRC
+
+** ~.ATOM~ 
+#+name: tangle_.atom
+#+BEGIN_SRC lisp
+  (defun .atom ()
+    (.first (.map 'string (.is-not 'member (cons #\Newline *whitespace*))
+                  :at-least 1)))
+  
+#+END_SRC
+
+#+BEGIN_SRC lisp :results output code
+  (test> (run (.map 'list (.prog1 (.atom) 
+                              (.or (.whitespace) (.not (.item)))))
+          ":foo bar :baz bat")
+     => (((":foo" "bar" ":baz" "bat") . "") ((":foo" "bar" ":baz") . "bat")
+         ((":foo" "bar") . ":baz bat") ((":foo") . "bar :baz bat")
+         (NIL . ":foo bar :baz bat")))
+        
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC lisp
+
+(((":foo" "bar" ":baz" "bat") . "") ((":foo" "bar" ":baz") . "bat")
+ ((":foo" "bar") . ":baz bat") ((":foo") . "bar :baz bat")
+ (NIL . ":foo bar :baz bat"))
+#+END_SRC
+
+#+BEGIN_SRC lisp :results output code
+  (test> (run (.first 
+                (.map 'list (.prog1 
+                             (.first (.map 
+                                      'list (.prog2   
+                                             (.optional (.whitespace))
+                                             (.atom)
+                                             (.optional (.whitespace))) 
+                                      :at-least 1))
+                             (.plus (.char= #\Newline) (.not (.item))))))
+                                     
+                 ":foo bar :baz bat
+             :jkl asd :qwerty uiop
+  "))
+          
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC lisp
+
+((((":foo" "bar" ":baz" "bat") (":jkl" "asd" ":qwerty" "uiop")) . ""))
+#+END_SRC
+
+   
+* Development Driven Testing
+
+#+BEGIN_SRC lisp
+  (in-package :cl)
+  
+  (defun cl-user::reader-macro-for-equal-gt (stream char)
+    (declare (ignore char))
+    (let ((next (peek-char nil stream nil nil)))
+      (cond ((and next (equal next #\>))
+             (read-char stream) 
+             (let ((next (peek-char nil stream nil nil)))
+               (if (and next (char= next #\space))
+                   (progn (read stream) (values))
+                   (let* ((next (peek-char nil stream nil nil))
+                          (symbol (unless (or (not next) (get-macro-character next))
+                                    (read stream))))
+                     (intern (concatenate 'string "=>" (when symbol (symbol-name symbol))))))))
+            ((find next " )" :test #'char=)
+             '=)
+            (t 
+             (let ((symbol (read stream)))
+               (intern (concatenate 'string "=" (symbol-name symbol))))))))
+  
+#+END_SRC
+
+#+BEGIN_SRC lisp
+  (ql:quickload "named-readtables")
+  
+  (named-readtables:defreadtable :example 
+    (:merge :standard) 
+    (:macro-char #\= #'cl-user::reader-macro-for-equal-gt ))
+#+END_SRC
+
+#+RESULTS:
+: #<NAMED-READTABLE :EXAMPLE {1002B2EB83}>
+
+#+BEGIN_SRC lisp
+(named-readtables:in-readtable :example)
+#+END_SRC
+
+
+#+BEGIN_SRC lisp
+(named-readtables:in-readtable :standard)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+(("SMUG/PARSE/ORG" . #<NAMED-READTABLE :EXAMPLE {1002B2EB83}>)
+ ("SMUG/PARSE/ORG" . #<NAMED-READTABLE :CURRENT {10002783A3}>)
+ ("COMMON-LISP-USER" . #<NAMED-READTABLE :EXAMPLE {1002B2EB83}>)
+ ("COMMON-LISP-USER" . #<NAMED-READTABLE :CURRENT {10002783A3}>)
+ ("COMMON-LISP-USER"
+  . #<NAMED-READTABLE COMMON-LISP-USER::EXAMPLES {1002C0D763}>)
+ ("SB-CLTL2" . #<READTABLE {1002C0D7A3}>)
+ ("SB-INTROSPECT" . #<READTABLE {1002C0D7A3}>)
+ ("SB-BSD-SOCKETS" . #<READTABLE {1002C0D7A3}>)
+ ("SB-BSD-SOCKETS-INTERNAL" . #<READTABLE {1002C0D7A3}>)
+ ("SB-POSIX" . #<READTABLE {1002C0D7A3}>)
+ ("SB-LOOP" . #<READTABLE {1002C0D7A3}>)
+ ("SB-EVAL" . #<READTABLE {1002C0D7A3}>)
+ ("SB-WALKER" . #<READTABLE {1002C0D7A3}>)
+ ("SB-UNIX" . #<READTABLE {1002C0D7A3}>)
+ ("SB-SEQUENCE" . #<READTABLE {1002C0D7A3}>)
+ ("SB-PROFILE" . #<READTABLE {1002C0D7A3}>)
+ ("SB-PRETTY" . #<READTABLE {1002C0D7A3}>)
+ ("SB-MOP" . #<READTABLE {1002C0D7A3}>)
+ ("SB-THREAD" . #<READTABLE {1002C0D7A3}>)
+ ("SB-GRAY" . #<READTABLE {1002C0D7A3}>)
+ ("SB-FORMAT" . #<READTABLE {1002C0D7A3}>)
+ ("SB-FASL" . #<READTABLE {1002C0D7A3}>)
+ ("SB-DISASSEM" . #<READTABLE {1002C0D7A3}>)
+ ("SB-DEBUG" . #<READTABLE {1002C0D7A3}>) ("SB-C" . #<READTABLE {1002C0D7A3}>)
+ ("SB-BIGNUM" . #<READTABLE {1002C0D7A3}>)
+ ("SB-ASSEM" . #<READTABLE {1002C0D7A3}>)
+ ("SB-ALIEN" . #<READTABLE {1002C0D7A3}>)
+ ("SB-PCL" . #<READTABLE {1002C0D7A3}>)
+ ("SB-ALIEN-INTERNALS" . #<READTABLE {1002C0D7A3}>)
+ ("SB-DI" . #<READTABLE {1002C0D7A3}>) ("SB-IMPL" . #<READTABLE {1002C0D7A3}>)
+ ("SB-SYS" . #<READTABLE {1002C0D7A3}>)
+ ("SB-KERNEL" . #<READTABLE {1002C0D7A3}>)
+ ("SB-VM" . #<READTABLE {1002C0D7A3}>) ("SB-INT" . #<READTABLE {1002C0D7A3}>)
+ ("SB-EXT" . #<READTABLE {1002C0D7A3}>))
+#+end_example
 
 * The Source Code
+** ~SMUG/PARSE/ORG~
+
+#+BEGIN_SRC lisp :noweb yes :tangle "../parse/org.lisp" :padline no
+  (defpackage :smug/parse/org
+    (:use :cl :smug/tutorial)
+    (:import-from :smug/parse/outline
+                  #:.outline 
+                  #:outline
+                  #:outline-headline
+                  #:outline-text
+                  #:outline-sub-outlines
+                  #:headline
+                  #:headline-stars
+                  #:headline-text)
+    (:import-from :alexandria)
+    (:import-from :yasexml
+                  #:<>)
+    (:export #:org-section-headline
+             #:org-section-sections
+             #:org-file))
+  (in-package :smug/parse/org)
+   
+  <<tutorial-loop-and-concatenate-strings>>
+  
+  <<tutorial-line>>
+  
+  <<org-in-buffer-settings>>
+  
+  <<org-.org-file-setting>>
+  
+  <<org-object-parsers>>  
+  <<org-object>>
+  
+  <<org-line>>
+  
+  <<org.markup>>
+  
+  <<org-footnote>>
+
+  <<org-inline>>
+  
+  <<org-section-and-org-file-struct>>
+  
+  <<org-body-section-and-file>>
+
+  <<org-document>>
+
+  <<tutorial-code-block>>
+
+  <<code-block-name>>
+ 
+  <<tutorial_.begin_src>>
+
+  <<tutorial_body-end-src>>
+
+  <<tangle_code-block-switches>>
+
+  <<tangle_code-block-header-arguments>>
+
+  <<tangle_whitespace>>
+
+  <<tangle_.atom>>
+#+END_SRC
+
+
+#+RESULTS:
+: ORG-FILE
+
+#+BEGIN_SRC lisp :noweb yes
+  (asdf:load-systems :smug :smug/weave/html)
+  (in-package :smug/weave/html)
+  (defun test-outline ()
+     (parse (.outline) 
+            (subseq "
+  <<weave-org-outline-test-text>>" 1)))
+  
+   (<> (:handler (cxml:make-string-sink
+                  :indentation 1
+                  :omit-xml-declaration-p t) 
+                ,#+(or) 
+                (closure-html:make-string-sink))
+  (<outline-ul/> (test-outline)))
+  
+
+  
+  
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+<ul>
+ <li>
+  <a href="#Top_level_headline">
+   Top level headline</a>
+  <ul>
+   <li>
+    <a href="#Second_level">
+     Second level</a>
+    <ul>
+     <li>
+      <a href="#3rd_level">
+       3rd level</a>
+     </li>
+     <li>
+      <a href="#3rd_level***">
+       3rd level</a>
+     </li>
+    </ul>
+   </li>
+  </ul>
+ </li>
+ <li>
+  <a href="#Another_top_level_headline">
+   Another top level headline</a>
+ </li>
+</ul>
+#+end_example
+
+** ~SMUG/MAKE~
+
+#+BEGIN_SRC lisp :tangle "../make.lisp"
+  (defpackage :smug/make
+    (:use :cl :smug/tutorial)
+    (:import-from :smug/parse/outline
+                  #:.outline
+                  #:outline-headline
+                  #:outline-text
+                  #:outline-sub-outlines
+                  #:headline-stars
+                  #:headline-text)
+      ,#+(or)(:import-from :alexandria)
+      ,#+(or)(:import-from :yasexml
+                          #:<>)
+      (:export #:*tutorial-outline*))
+  (in-package :smug/make)
+  
+  (defparameter *tutorial-outline* 
+    (parse (.outline) (alexandria:read-file-into-string 
+                       (merge-pathnames 
+                        "doc/tutorial.org" 
+                        (asdf:system-source-directory :smug)))))
+#+END_SRC
+
+#+RESULTS:
+: *TUTORIAL-OUTLINE*
+
+** Testing
+
+#+BEGIN_SRC lisp
+  (defmacro test> (form &key ((=> provided-result) nil result-provided?)
+                          (test ''equal))
+    `(let* ((form-result ,form)
+            (result (if ',result-provided?
+                        (funcall ,test form-result ',provided-result)
+                        form-result)))
+       (prog1 result (assert result
+                             () "~A~% => ~S ~%  ...should be :~%    ~S"
+                             ',form form-result ',(if result-provided? 
+                                                      provided-result
+                                                      "Something that evaluates to a non-NIL value")))))
+#+END_SRC
+
+#+RESULTS:
+: TEST>
+
+** ~SMUG/PARSE/OUTLINE~
+
+#+BEGIN_SRC lisp :noweb yes :tangle "../parse/outline.lisp" :padline no
+  (defpackage :smug/parse/outline
+    (:use :cl :smug/tutorial)
+    (:export))
+  (in-package :smug/parse/outline) 
+  
+  <<tutorial-line>>
+  
+  <<weave-stars>>
+
+  <<weave-headline>>
+
+  <<weave-outline-line>>
+
+  <<weave-outline-text>>
+
+  <<weave-outline-struct>>
+
+  <<weave-outline>>
+#+END_SRC
+
+#+BEGIN_SRC lisp
+(asdf:load-systems :smug :smug/parse/outline )
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+** ~SMUG/WEAVE/HTML~
+
+#+BEGIN_SRC lisp :noweb yes :tangle "../weave/html.lisp" :padline no
+  (defpackage :smug/weave/html
+    (:use :cl :smug/tutorial :smug/parse/org)
+  
+    (:import-from :smug/parse/outline
+                  #:.outline)
+    (:import-from :smug/parse/org
+                  #:org-file
+                  #:setting
+                  #:setting-name
+                  #:setting-words)
+    (:import-from :alexandria)
+    (:import-from :yasexml
+                  #:<>)
+    (:import-from :closure-html)
+    (:export))
+  (in-package :smug/weave/html) 
+  
+  <<weave-html>>  
+  
+  <<whitespace-as-underscore>>
+  
+  <<make-id-hashes>>
+  
+  <<unique-id>>
+  
+  <<org-body>>
+
+  <<export-html>>
+ 
+  <<outline-ul>>
+  
+  
+#+END_SRC
+
+#+RESULTS:
+: <ORG-SUBSECTIONS-UL/>
+
+#+BEGIN_SRC lisp :noweb yes
+  (asdf:load-systems :smug :smug/weave/html)
+  (in-package :smug/weave/html)
+  (defun test-outline ()
+     (parse (.outline) 
+            (subseq "
+  <<weave-org-outline-test-text>>" 1)))
+  
+   (<> (:handler (cxml:make-string-sink
+                  :indentation 1
+                  :omit-xml-declaration-p t) 
+                ,#+(or) 
+                (closure-html:make-string-sink))
+  (<outline-ul/> (test-outline)))
+  
+
+  
+  
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+<ul>
+ <li>
+  <a href="#Top_level_headline">
+   Top level headline</a>
+  <ul>
+   <li>
+    <a href="#Second_level">
+     Second level</a>
+    <ul>
+     <li>
+      <a href="#3rd_level">
+       3rd level</a>
+     </li>
+     <li>
+      <a href="#3rd_level***">
+       3rd level</a>
+     </li>
+    </ul>
+   </li>
+  </ul>
+ </li>
+ <li>
+  <a href="#Another_top_level_headline">
+   Another top level headline</a>
+ </li>
+</ul>
+#+end_example
+
+** ~SMUG/WEAVE~
+
+#+BEGIN_SRC lisp :noweb yes :tangle "../weave.lisp" :padline no
+  (defpackage :smug/weave
+    (:use :cl :smug/tutorial)
+    (:import-from :alexandria)
+    (:import-from :yasexml
+                  #:<>)
+    (:export))
+  (in-package :smug/weave) 
+  
+  <<weave-document-line>>
+  
+  <<weave-stars>>
+
+  <<weave-headline>>
+
+  <<weave-outline-line>>
+
+  <<weave-outline-text>>
+  <<weave-outline-struct>>
+  <<weave-outline>>
+#+END_SRC
+
+#+BEGIN_SRC lisp
+(asdf:load-systems :smug :smug/weave)
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+** ~SMUG/TANGLE~
+ 
+*** The tangle.lisp file
+#+BEGIN_SRC lisp :noweb yes :tangle "../tangle.lisp" :padline no
+  (defpackage :smug/tangle
+    (:use :cl :smug/tutorial)
+    (:export))
+  (in-package :smug/tangle) 
+
+  <<tangle_.line>>
+
+  <<tangle_whitespace>>
+
+  <<tangle_.atom>>
+
+  <<tangle_whitespace-prefix>>
+  
+  <<tangle_code-block-switches>>
+
+  <<tangle_code-block-header-arguments>>
+
+  <<tangle_.code-block-plist>>
+
+  <<tangle_.code-block>>
+
+  <<tangle_getf-code-block>>
+
+  <<tangle_org-code-blocks>>
+
+  <<tangle_code-blocks-variable>>
+
+  <<tangle_code-blocks-with-tangle>>
+
+  <<tangle_code-block-noweb-body>>
+
+  <<tangle_.noweb>>
+#+END_SRC
+
+
+
 ** SMUG/TUTORIAL 
 
-*** SMUG/TUTORIAL primatives
+*** SMUG/TUTORIAL primitives
 
-**** =.RUN=
+**** ~RUN~
 
 #+NAME: tutorial-source
 #+BEGIN_SRC lisp :noweb yes
-<<tutorial_.run>>
+<<tutorial_run>>
 
 #+END_SRC
 
 #+NAME: tutorial-source-export
 #+BEGIN_SRC lisp
-#:.run
+#:run
 #+END_SRC
 
-**** =.FAIL= and =.PLUS=
+**** ~.FAIL~ and ~.PLUS~
 
 #+NAME: tutorial-source
 #+BEGIN_SRC lisp :noweb yes
@@ -1122,7 +4842,7 @@ use a -l switch to change the format, for example
 #:.bind
 #+END_SRC
 
-**** =.OR= and =.NOT=
+**** ~.OR~ and ~.NOT~
 
 #+NAME: tutorial-source
 #+BEGIN_SRC lisp :noweb yes
@@ -1138,8 +4858,7 @@ use a -l switch to change the format, for example
 #:.not
 #+END_SRC
 
-
-*** The =INPUT= interface functions
+*** The ~INPUT~ interface functions
 
 #+NAME: tutorial-source
 #+BEGIN_SRC lisp :noweb yes
@@ -1153,9 +4872,7 @@ use a -l switch to change the format, for example
 #:input-rest
 #+END_SRC
 
-*** The =PARSER= itself
-
-
+*** The ~PARSER~ itself
 
 #+NAME: tutorial-source
 #+BEGIN_SRC lisp :noweb yes
@@ -1168,62 +4885,88 @@ use a -l switch to change the format, for example
 #+END_SRC
 
 
-
 *** The tutorial.lisp file
+
 #+BEGIN_SRC lisp :noweb yes :tangle "../tutorial.lisp" :padline no
   (defpackage :smug/tutorial
     (:use :cl)
     (:export 
+     #:.let*
+     #:.map
+     #:.concatenate
+     #:.is
+     #:.is-not
+     #:.char=
+     #:.char-equal
+     #:.string-equal
+     #:.string=
+     #:.progn
+     #:.prog1
+     #:.prog2
+     #:.and
+     #:.or
+     #:.not
+     #:.first
+     #:.optional
+     #:run
+     #:parse
      <<tutorial-source-export>>))
   (in-package :smug/tutorial) 
-
+  
   <<tutorial_.letstar>>
-
+  
   <<tutorial-source>>
-
+  
   <<tutorial_.list-of>>
-
+  
   <<tutorial_.satisfies>>
-
-  <<tutorial_.maybe>>
-
+  
+  <<tutorial_.optional>>
+  
   <<tutorial_.and>>
-
+  
   <<tutorial_.progn>>
-
+  
   <<tutorial_.is-not>>
-
+  
   <<tutorial_.is>>
-
+  
+  <<tutorial-.mapcar>>
+  
+  <<tutorial-.mapc>>
+  
+  <<tutorial-.make-list>>
+  
+  <<tutorial-.concatenate>>
+  
   <<tutorial_.map>>
-
+  
   <<tutorial_char=digit-char|lower-case-p>>
   
   <<tutorial_.coerce>>
-
+  
   <<tutorial_.string=>>
   
   <<tutorial_.char-equal>>
-
+  
   <<tutorial_.string-equal>>
- 
-
-  <<tutorial-org_.line>>
-
-  <<tutorial-org_.keyword>>
+  
+  <<tutorial_.first>>
+   
 #+END_SRC
 
+#+RESULTS:
+: \.FIRST
 
-
-* COMMENT =.PROGN=, =.PROG1= and =.PROG2=
+* COMMENT ~.PROGN~, ~.PROG1~ and ~.PROG2~
 
 This likely should not be here.
 
-    =.PROGN= can be defined in terms of =IF=, and
-   doesn't even need to test for failure, as =.BIND= handles failure
+    ~.PROGN~ can be defined in terms of ~IF~, and
+   doesn't even need to test for failure, as ~.BIND~ handles failure
    automatically.
 
-   =.PROGN= (known as '>>' in haskell) sequentially composes parsers,
+   ~.PROGN~ (known as '>>' in haskell) sequentially composes parsers,
    discarding the results of all but the last one, and returning that
    result.
 
@@ -1240,13 +4983,13 @@ This likely should not be here.
   
 #+END_SRC
 
-** =.PROG1=
-  Since we have a sequence composer, =.PROGN=, =.PROG1= is a simple
-  use of that. We run a =PARSER=, keep the =RESULT=, then use =.PROGN=
+** ~.PROG1~
+  Since we have a sequence composer, ~.PROGN~, ~.PROG1~ is a simple
+  use of that. We run a ~PARSER~, keep the ~RESULT~, then use ~.PROGN~
   to run the rest.
 
-  The actual variable we are =.BIND='ing for the rest can be
-  ignored, and we simple return the =.RESULT= of =RESULT=.
+  The actual variable we are ~.BIND~'ing for the rest can be
+  ignored, and we simple return the ~.RESULT~ of ~RESULT~.
 
 #+NAME: tutorial_.prog1
 #+BEGIN_SRC lisp
@@ -1274,48 +5017,113 @@ This likely should not be here.
     (.progn parser1 (apply #'.prog1 parser2 parsers)))
 #+END_SRC
 
-* COMMENT Org 
+* Appendix
+** Release Notes
+** Task List
+*** TODO Patch printf.lisp to use this code
+
+#+BEGIN_QUOTE
+(10:36:46 AM) nyef: drewc: In case you're here, someone is asking about your little toy.
+
+(10:37:23 AM) dlowe: drmeister: I've used smug. It's quite nice. http://github.com/dlowe-net/printf
+#+END_QUOTE
+
+*** TODO Make ~.line~ and ~.document-line~ merged
+ useful, should be together, etc.
+*** TODO reason for this
+#+BEGIN_SRC lisp
+(defun body (contents &optional body lines)
+	       (flet ((wrap-up () 
+			(when lines
+			  (setf body (cons (apply 'concatenate 
+						  'string (reverse lines)) 
+					   body)
+				lines '()))))
+		 (if (not contents)
+		     (progn (wrap-up) (nreverse body))
+		     (let ((item (first contents)))
+		       (cond ((stringp item)
+			      (push item lines))
+			     (t (wrap-up) (push item body)))
+		       (body (rest contents) body lines)))))
+#+END_SRC
+*** TODO Explain use of ~.first~ in weave
+*** TODO turn /parser/ into /parse/ for the package names
+** Org Mode
 
 
 #+BEGIN_SRC emacs-lisp
   (setq org-src-fontify-natively t)
   (setq *org-babel-use-quick-and-dirty-noweb-expansion* t)
+   ;(setq org-use-sub-superscripts "{}")
 #+END_SRC
+
+#+BEGIN_SRC emacs-lisp
+
+
+#+END_SRC
+
+#+RESULTS:
 
 tutorial_.bind
 
-** `C-c C-x b'     (`org-tree-to-indirect-buffer')
-     Show the current subtree in an indirect buffer(3).  With a numeric
-     prefix argument N, go up to level N and then take that tree.  If N
-     is negative then go up that many levels.  With a `C-u' prefix, do
-     not remove the previously used indirect buffer.  
+*** `C-c C-x b'     (`org-tree-to-indirect-buffer')
+      Show the current subtree in an indirect buffer(3).  With a numeric
+      prefix argument N, go up to level N and then take that tree.  If N
+      is negative then go up that many levels.  With a `C-u' prefix, do
+      not remove the previously used indirect buffer.  
 
-** Emphasis and monospace
+*** Emphasis and monospace
 
 You can make words `*bold*', `/italic/', `_underlined_', `=code=' and
 `~verbatim~', and, if you must, `+strike-through+'.  Text in the code
 and verbatim string is not processed for Org mode specific syntax; it
 is exported verbatim.
  
-* footnotes	 
+* Footnotes	 
 
 [1] [[file:monparsing.org][Monadic Parser Combinators]] (pdf, ps, bibtex) Graham Hutton and
 Erik Meijer. Technical Report NOTTCS-TR-96-4, Department of Computer
 Science, University of
 Nottingham, 1996.
 
- -- http://www.cs.nott.ac.uk/~gmh/bib.html#monparsing
+[fn:1] http://www.cs.nott.ac.uk/~gmh/bib.html#monparsing
 
 [2] http://www.willamette.edu/~fruehr/haskell/seuss.html 
 
 [3] like, say, scheme
 
-
-#(end-lisp)
-
 [4] Literate Programming
 
 [fn:f_chareq] http://clhs.lisp.se/Body/f_chareq.htm
+
+[5] "In mathematics and computer science, currying is the technique of
+translating the evaluation of a function that takes multiple arguments
+(or a tuple of arguments) into evaluating a sequence of functions,
+each with a single argument (partial application). " 
+ -- https://en.wikipedia.org/wiki/Currying
+
+[fn:org-src] http://orgmode.org/org.html#Working-With-Source-Code
+
+[fn:oo] http://orgmode.org/manual/Outlines.html#Outlines
+
+[fn:eom] http://www.emacswiki.org/emacs/OutlineMode
+
+[fn:oh] http://orgmode.org/manual/Headlines.html#Headlines
+
+[fn:html5-id] https://html.spec.whatwg.org/multipage/dom.html#the-id-attribute
+
+[fn:noweb] http://orgmode.org/org.html#noweb
+
+[fn:org-title] http://orgmode.org/manual/Document-title.html
+
+[fn:org-footnote]  http://orgmode.org/manual/Footnotes.html
+
+[fn:org-in-buffer] http://orgmode.org/org.html#In_002dbuffer-settings
+ http://orgmode.org/manual/In_002dbuffer-settings.html#In_002dbuffer-settings
+
+[fn:org-markup] http://orgmode.org/manual/Markup.html#Markup
+
 
 
 
