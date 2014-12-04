@@ -17,31 +17,40 @@
            #:org-file))
 (in-package :smug/parse/org)
  
-(defun loop-and-concatenate (list &aux body text)
-  (if (stringp list) 
-       list
-       (flet ((text () 
+(defun loop-and-concatenate (list-or-thing &optional return)
+ (if (not (listp list-or-thing))
+     list-or-thing
+     (let (text body)
+       (flet ((push-text () 
                 (when text                        
                   (push (apply #'concatenate 'string 
                                (mapcar #'string (nreverse text)))
                         body)
                   (setf text nil))))
-         (let ((result 
-                (loop :for thing in list
-                   :do  (typecase thing
+         (let ((result
+                (loop :for thing :in list-or-thing
+                   :do
+                   (etypecase thing
+                     ((or character string)
+                      (push thing text))
+                     (list 
+                      (push-text)
+                      (dolist (i (loop-and-concatenate thing t))
+                        (etypecase i
                           ((or character string)
-                           (push thing text))
-                          (list 
-                           (let ((result (loop-and-concatenate thing)))
-                             (typecase result
-                               (string 
-                                (push result text))
-                               (t (text)
-                                  (push result body)))))
-                             (t (text) (push thing body)))
+                           (push i text))
+                          (t 
+                           (push-text)
+                           (push i body)))))
+                     (t (push-text)
+                        (push thing body)))
                    :finally 
-                   (text) (return (nreverse body)))))
-           (if (rest result) result (first result))))))
+                   (push-text) (return (nreverse body)))))
+           (cond (return result)
+                 ((rest result) (loop-and-concatenate result t))
+                 (t (first result))  ))))))
+                     
+  
 
 
 (defun .line ()
@@ -144,6 +153,13 @@
   (.or (.markup)
        (.footnote-reference)))
 
+(defstruct blockquote (text))
+(defun .quote ()
+  (.let* ((quote (.progn (.string-equal "#+BEGIN_QUOTE")
+                         (.line)
+                         (.first (.prog1 (.map 'list (.line))
+                                         (.string-equal "#+END_QUOTE"))))))
+    (.result (make-blockquote :text (loop-and-concatenate quote)))))
 
 
 (defstruct org-headline 
@@ -239,7 +255,7 @@
                    (|#+NAME: <name>|)))
             (begin (|#+BEGIN_SRC <language> <switches> <header arguments>|))
             (body  (|<body> #+END_SRC|)))
-       (.result (make-code-block :name name :body body begin))))
+       (.result (apply #'make-code-block :name name :body body begin))))
 
 
 (defun |#+NAME: <name>| ()
