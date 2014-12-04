@@ -1094,7 +1094,7 @@ So, we can specify the ~.MAP~ parser as follows.
 #+BEGIN_SRC lisp
   (defun .sexp ()
     (.prog2 (.optional (.whitespace))
-            (.or (.list) (.atom))
+            (.or (.list) (.atom)  )
             (.optional (.whitespace))))
   
   (defun .atom ()
@@ -1107,10 +1107,12 @@ So, we can specify the ~.MAP~ parser as follows.
     (.or (.is-not 'member non-constituent)
          (.and (.char= #\\) (.item)))))
   
+  (defvar *nil* (gensym))
+  
   (defun .nil ()
     (.and (.or (.string-equal "NIL")
                (.string= "()"))
-          (.result NIL)))
+          (.result *nil*)))
   
   (defun .dot ()
     (.prog2 (.optional (.whitespace))
@@ -1126,21 +1128,35 @@ So, we can specify the ~.MAP~ parser as follows.
   (defun .whitespace ()
     (.first (.map 'list (.is 'member (whitespace)))))
   
-  (defun .list (&key delimited)
+  (defun .list (&key delimited &aux (not (gensym)))
     (.or (.nil)
          (.let* ((_ (if (not delimited) 
-                        (.char= #\() 
+                        (prog1 (.char= #\() 
+                          (setf delimited #\)))
                         (.result nil)))
                  (first (.sexp))
                  (dot (.optional (.dot)))
                  (rest (if dot 
                            (.sexp) 
-                           (.optional (.list :delimited #\)))))
-                 (_ (if (or (not (listp rest))
-                            (not rest))
-                        (.char= (or delimited #\)))
-                        (.result nil))))
+                           (.or (.list :delimited #\))
+                                (.and (.char= delimited)
+                                      (.result :nil))))))
            (.result (list* first rest)))))
+  
+  
+  (defun .list (&key 
+                  (start (.char= #\())
+                  (end (.char=  #\))))
+    (.or 
+     (.let* ((start (or start
+                    (.result nil)))
+             (first (.optional (.sexp)))
+             (rest (if first
+                       (.optional (.list :start nil :end nil))
+                       (.result nil)))
+             (end (.progn (.optional (.whitespace))
+                        (or end (.result nil)))))
+       (.result (if first (list* first rest))))))
             
   
   

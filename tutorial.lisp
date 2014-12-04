@@ -53,6 +53,16 @@
           result      
         (apply #'values result input rest)))))
 
+(defun .run (&rest baz)
+  (error ".RUN is now called RUN ~{~A~%~}" baz))
+
+(defun parse (parser input)
+  (let ((result (run parser input)))
+    (when result 
+      (destructuring-bind ((result . input) &rest rest)
+          result      
+        (apply #'values result input rest)))))
+
 (defun .fail ()
   (lambda (input) (declare (ignore input)) nil))
 
@@ -169,11 +179,10 @@
                         (.result nil))))
         (.result (cl:concatenate output-type-spec first rest)))))
 
-
 (defun .map (result-type parser
              &key 
                (at-least 1))
-  "=> a ~result-type~ of /parser/ results."
+  "=> a =result-type= of /parser/ results."
   (.let* ((list-1 (.make-list at-least :initial-element parser))
           (list-2 (funcall (if result-type #'.mapcar #'.mapc) parser)))
     (.result (when result-type (concatenate result-type list-1 list-2)))))
@@ -189,8 +198,6 @@
 
 (defun .upper-case-p ()
   (.is #'cl:upper-case-p))  
-
-
 
 (defun .string= (string)
   (if (string= string "")
