@@ -1,9 +1,0 @@
-
-#+INCLUDE: monparsing.org
-
-#+begin_src lisp :tangle ../test/monparsing.lisp :noweb monparsing.org
-smuh
- <<lisp>>
-asd
-#+end_src
-

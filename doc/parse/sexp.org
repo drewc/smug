@@ -1,0 +1,317 @@
+#+TITLE: SMUG : Parsing S-Expressions with Super Monadic Über Go-into
+
+~SMUG~ itself is written using the Common Lisp style of "symbolic
+expression"s. Using ~smug~ to parse ~smug~ is circular enough to be
+lisp-y.
+
+* Definition
+
+#+BEGIN_QUOTE
+*S-expression* 
+From Wikipedia, the free encyclopedia
+
+Tree data structure representing the s-expression for (* 2 (+ 3 4)) In
+computing, s-expressions, sexprs or sexps (for "symbolic expression")
+are a notation for nested list (tree-structured) data, invented for
+and popularized by the programming language Lisp, which uses them for
+source code as well as data. 
+
+In the usual parenthesized syntax of Lisp, an s-expression is
+classically defined inductively as
+
+ - an atom, or
+ - an expression of the form ~(x . y)~ where ~x~ and ~y~ are s-expressions.
+
+[...]
+
+Most modern sexpr notations in addition use an abbreviated notation to
+represent lists in s-expressions, so that
+
+~(x y z)~
+stands for
+
+~(x . (y . (z . NIL)))~
+#+END_QUOTE
+
+* /Parser/ ~.SEXP~ 
+
+All an s-expression could contain is :
+
+- an atom 
+- an expression.
+
+The expression will now be known as a ~CONS~, so really the parser is
+simply this.
+
+#+BEGIN_SRC lisp
+(.or (.atom sexp) (.cons sexp))
+#+END_SRC
+
+A ~(.optional (.whitespace))~ is added to the start, and the parser is
+complete.
+
+#+name: test-sexp.sexp
+#+BEGIN_SRC lisp 
+  (defun .sexp (&optional (sexp *sexp*))
+    (.progn (.optional (.whitespace))
+            (.or (.atom sexp) (.cons sexp))))
+#+END_SRC
+
+** A Note on Recursion
+
+A temptation could be to use [[file:~/me/src/smug/doc/tutorial.org::tutorial_.and][~.AND~]]  as depicted in the
+tutorial. 
+
+#+BEGIN_SRC lisp 
+  (defun .sexp (&optional (sexp *sexp*))
+    (.and (.optional (.whitespace))
+            (.or (.atom sexp) (.cons sexp))))
+#+END_SRC
+
+The issue is that ~.AND~ as defined is not a /Special Operator/, or
+even a macro, but a simple function. Now, in [[%5B%5B.cons%5D%5Bfile:~/me/src/smug/doc/test/sexp.org::.cons%5D%5D][~.CONS~]] we call ~.SEXP~
+recursively. The brain seems to think that it should simply work, but
+the ~INFO: Control stack guard page unprotected~ says something
+different. 
+
+To avoid infinite recursion, it is generally a good idea to have at
+least one ~.LET*~ binding before the recursion. ~.PROGN~ is a macro
+that contains one. 
+
+* /Structure Class/ ~SEXP~
+
+The definition itself has ~x~ and ~y~, which themselves are
+s-expressions, and ~#\)~, ~#\(~, ~#\Space~ and ~#\.~.  That can simply
+recorded in a /struct/.
+
+#+name: test-sexp-struct
+#+BEGIN_SRC lisp
+  (defstruct sexp
+    (open #\()
+    (separate #\.)
+    (close #\))
+    (whitespace '(#\Newline #\Space #\Tab)))
+#+END_SRC
+
+#+RESULTS: test-sexp-struct
+: SEXP
+
+** /Variable/ ~*SEXP*~
+Most of the time "normal" s-expressions will be parsed., so a default /special/
+variable is on order.
+
+#+name: test-sexp-var
+#+BEGIN_SRC lisp 
+  (defparameter *sexp* (make-sexp))
+#+END_SRC
+
+#+RESULTS: test-sexp-var
+: *SEXP*
+
+** /Parser/ ~.whitespace~
+
+#+name: test-sexp.whitespace
+#+BEGIN_SRC lisp 
+  (defun .whitespace (&key (sexp *sexp*)
+                           (result-type nil))
+    (.first (.map result-type (.is 'member (sexp-whitespace sexp)))))
+#+END_SRC
+
+#+RESULTS: test-sexp.whitespace
+: \.WHITESPACE
+
+* /Parser/ ~.ATOM~
+
+#+name: test-sexp.atom
+#+BEGIN_SRC lisp      
+  (defun .atom (&optional (sexp *sexp*))
+    (.or (|.#\\|) 
+         (.first (.map 'string (.constituent sexp)))))
+#+END_SRC
+
+** /Parser/ ~|.#\\|~ : "Sharpsign Backslash"
+
+#+BEGIN_QUOTE
+*Syntax:* ~#\<<x>>~
+
+When the token x is a single character long, this parses as the
+literal character char. Uppercase and lowercase letters are
+distinguished after #\; #\A and #\a denote different character
+objects. Any single character works after #\, even those that are
+normally special to read, such as left-parenthesis and
+right-parenthesis.
+
+In the single character case, the x must be followed by a
+non-constituent character. After #\ is read, the reader backs up over
+the slash and then reads a token, treating the initial slash as a
+single escape character (whether it really is or not in the current
+readtable).
+
+When the token x is more than one character long, the x must have the
+syntax of a symbol with no embedded package markers. In this case, the
+sharpsign backslash notation parses as the character whose name is
+(string-upcase x);
+#+END_QUOTE
+
+#+name: test-sexp.sharpsign-backslash
+#+BEGIN_SRC lisp
+  (defun |.#\\| ()
+    (.let* ((sb (.string= "#\\"))
+            (char 
+             (.or (.prog1 (.item) (.or (.whitespace) 
+                                       (.not (.item))))
+                  (.first (.map 'string (.constituent))))))
+      (.result (concatenate 'string sb (string char)))))
+           
+#+END_SRC
+
+#+RESULTS:
+: |\.
+
+** /Parser/ ~.CONSTITUENT~
+
+#+BEGIN_QUOTE
+*constituent* /n./, /adj./ 
+  1. a. /n./ :: the syntax type of a character that is part of a
+     token. For details, see Section 2.1.4.1 (Constituent Characters).
+
+     b. /adj./ (of a character) having the constituent[1a] syntax
+     type.  
+
+     c. /n./ a constituent character.
+-- http://www.lispworks.com/documentation/lw60/CLHS/Body/26_glo_c.htm#constituent
+#+END_QUOTE
+
+The ~SEXP~ /struct/ says what is not a member of a sexp, so anything
+that is /not not/ a member is double negatively a constituent
+character.
+
+Strangely enough, what immediately arises adds another negative. The
+definition of the /Structure Class/  ~SEXP~ includes non-constituent characters
+yet is itself an s-expression. As luck would have it, they are
+preceeded by a ~\~ character. 
+
+By allowing that form of escaping, the ~.CONSTITUENT~ can be ~DEFUN~'d.
+
+#+name: test-sexp.constituent
+#+BEGIN_SRC lisp
+  (defun .constituent (&optional (sexp *sexp*))
+   (.or (.and (.char= #\\) (.item))
+        (.is-not 'member (list* (sexp-open sexp)
+                                (sexp-close sexp)
+                                (sexp-whitespace sexp)))))
+                               
+#+END_SRC
+
+#+RESULTS:
+: \.CONSTITUENT
+
+* /Parser/ ~.CONS~
+
+# <<.cons>>
+#+name : test-sexp.cons
+#+BEGIN_SRC lisp 
+  (defun .cons (&optional (sexp *sexp*))
+    (.let* ((car (.progn (.char= (sexp-open sexp))
+                         (.sexp)))
+            (dot (.optional 
+                  (.progn 
+                   (.whitespace)
+                   (.char= (sexp-separate sexp)))))
+            (cdr (.prog1 (if dot 
+                             (.sexp)
+                             (.first (.map 'list (.sexp) 
+                                           :at-least 0)))
+                         (.char= #\)))))
+                 
+      (.result (cons car cdr))))
+#+END_SRC
+
+#+RESULTS:
+: \.CONS
+
+
+
+* Example
+
+So, there is a struct definition sexp.
+
+#+BEGIN_SRC lisp :noweb yes :tangle "sexp.lisp-expr" :padline no
+<<test-sexp-struct>>
+#+END_SRC
+
+When the ~CL:STRING~ actually make a out of it, we will see two
+backslashes where in reality there is only one.
+
+#+BEGIN_SRC lisp
+  (≻ (alexandria:read-file-into-string 
+      (merge-pathnames "doc/test/sexp.lisp-expr"
+         (asdf:system-source-directory :smug)))
+   :=> 
+  "(defstruct sexp
+    (open #\\()
+    (separate #\\.)
+    (close #\\))
+    (whitespace '(#\\Newline #\\Space #\\Tab)))
+  ")
+#+END_SRC
+
+This is simply because the ~\~ is already used as a ~\~. 
+
+#+BEGIN_SRC lisp
+(≻ (length "\\") 
+  :=> 1)
+#+END_SRC
+
+
+* Source File
+
+#+BEGIN_SRC lisp :padline no :tangle "../../parse/sexp.lisp" :noweb yes 
+  (defpackage :smug/parse/sexp
+    (:use :cl :smug))
+  (in-package :smug/parse/sexp)
+
+  <<test-sexp-struct>>
+
+  <<test-sexp-var>>
+
+  <<test-sexp.whitespace>>
+ 
+  <<test-sexp.sharpsign-backslash>>
+
+  <<test-sexp.constituent>>
+
+  <<test-sexp.atom>>
+
+  <<test-sexp.cons>>
+ 
+  <<test-sexp.sexp>>
+#+END_SRC
+
+#+BEGIN_SRC lisp :padline no :tangle "../../test/sexp.lisp" :noweb yes 
+  (defpackage :smug/test/sexp
+    (:use :cl :smug))
+  (in-package :smug/test/sexp)
+
+  <<test-sexp-struct>>
+
+  <<test-sexp-var>>
+
+  <<test-sexp.whitespace>>
+ 
+  <<test-sexp.sharpsign-backslash>>
+
+  <<test-sexp.constituent>>
+
+  <<test-sexp.atom>>
+
+  <<test-sexp.cons>>
+ 
+  <<test-sexp.sexp>>
+#+END_SRC
+
+
+
+
+
+

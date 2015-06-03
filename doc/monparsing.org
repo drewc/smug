@@ -138,6 +138,7 @@ result :: a -> Parser a
 result v = \inp -> [(v,inp)]
 #+end_src
 
+# <<lisp-result>>
 #+name: lisp-result
 #+begin_src lisp
     (defun result (value)
@@ -1750,7 +1751,7 @@ efficiency will concern parsers for some kind of expression. In such cases, manu
 factorising the parser will not be required, since expression-like parsers can be built
 using the chain combinators from the previous section, which already encapsulate
 the necessary left factorisation.
-The motto of this section is the following: backtracking is a powerful tool, but it
+bThe motto of this section is the following: backtracking is a powerful tool, but it
 should not be used as a substitute for care in designing parsers.
 
 ** Improving laziness
@@ -2133,7 +2134,7 @@ handled by using identifier to define the parser for variables. Finally, note ho
 applications (f e1 e2 ... en) are parsed in the form (((f e1) e2) ... ) by
 using the chainl1 combinator.
 
-** Factorising the parser monad
+* Factorising the parser monad
 
 Up to this point in the article, combinator parsers have been our only example of
 the notion of a monad. In this section we define a number of other monads related
@@ -4601,7 +4602,6 @@ not needed.
    <<test lisp word>> 
   
 #+end_src
-
 
 ** Test Monadic Parser
    :PROPERTIES:

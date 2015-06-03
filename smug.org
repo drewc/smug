@@ -1,4 +1,4 @@
-smug: parsing for lisp, made easy.
+#+TITLE: smug : parsing for lisp, made easy.
 
 * Introduction
 
@@ -8,12 +8,8 @@ smug: parsing for lisp, made easy.
   recursive descent parsers without funky syntax or impenetrable
   macrology.
 
-"Smug is a library for parsing text, based on monadic parser
-combinators. Using a simple technique from the functional programming
-camp, smug makes it simple to create quick extensible recursive
-descent parsers without funky syntax or impenetrable macrology."
-
 * Features
+
   - parsers are first class values written in basic lisp
   - non-deterministic infinite look-ahead  
   - easy to learn, easy to use
@@ -22,6 +18,9 @@ descent parsers without funky syntax or impenetrable macrology."
 
 * Download and Install
 
+It is in quicklisp. However, it is out of date there I think.
+
+** Old version
 #+BEGIN_SRC sh
 cd ~/quicklisp/local-projects/
 git clone ssh://dcrampsie@common-lisp.net/var/git/projects/asdf/asdf.git
@@ -41,9 +40,11 @@ git clone http://github.com/fare/lisp-interface-library/
 #+END_SRC
 
 * Tutorial
-[[file:doc/tutorial.org][tutorial.org]]
 
+[[file:doc/tutorial.org][tutorial.org]]
       
+
+
 * footnotes	 
 
 [fn:1] Monadic parser combinators (pdf, ps, bibtex) Graham Hutton and

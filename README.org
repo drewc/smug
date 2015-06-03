@@ -1,0 +1,43 @@
+SMUG : Super Monadic Über Go-into
+
+  ~SMUG~ is a library for parsing text, based on _monadic parser
+  combinators_. Using a simple technique from the functional
+  programming camp, ~SMUG~ makes it simple to create quick extensible
+  recursive descent parsers without funky syntax or impenetrable
+  macrology.
+ 
+* Features
+
+  - parsers are first class values written in basic lisp
+  - non-deterministic infinite look-ahead  
+  - easy to learn, easy to use
+  - extensible input protocol : parse strings, streams, lists etc
+  - in-depth tutorial : no previous experience required.
+
+* Download and Install
+
+#+BEGIN_SRC sh
+cd ~/quicklisp/local-projects
+git clone https://github.com/drewc/smug.git
+#+END_SRC
+
+#+BEGIN_SRC lisp
+(ql:quickload :smug)
+#+END_SRC
+
+* Documentation
+
+See [[file:doc/smug.org][doc/smug.org]]
+
+* Support 
+
+https://github.com/drewc/smug/issues or mailto:me@drewc.ca 
+
+* Licence
+
+The MIT License (MIT)
+
+Copyright (c) 2010-2015 Drew Crampsie
+
+see [[file:LICENSE][LICENSE]]
+
