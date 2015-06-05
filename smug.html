@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>SMUG : Super Monadic Über Go-into SMUG : Parsing S-Expressions with Super Monadic Über Go-into</title>
+<!-- 2015-06-04 Thu 16:16 -->
+<meta  charset="utf-8">
+<meta  name="generator" content="Org-mode">
+<meta  name="author" content="Drew Crampsie">
+<script src="https://code.jquery.com/jquery-2.1.3.min.js"></script>
+<link rel="stylesheet" type="text/css" href="http://cdnjs.cloudflare.com/ajax/libs/bootswatch/3.3.4/readable/bootstrap.min.css" />
+<script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
+<script type="text/javascript">
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this tag.
+
+Copyright (C) 2012-2013 Free Software Foundation, Inc.
+
+The JavaScript code in this tag is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU GPL) as published by the Free Software
+Foundation, either version 3 of the License, or (at your option)
+any later version.  The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+
+As additional permission under GNU GPL version 3 section 7, you
+may distribute non-source (e.g., minimized or compacted) forms of
+that code without the copy of the GNU GPL normally required by
+section 4, provided you include this license notice and a URL
+through which recipients can access the Corresponding Source.
+
+
+@licend  The above is the entire license notice
+for the JavaScript code in this tag.
+*/
+<!--/*--><![CDATA[/*><!--*/
+ function CodeHighlightOn(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(null != target) {
+     elem.cacheClassElem = elem.className;
+     elem.cacheClassTarget = target.className;
+     target.className = "code-highlighted";
+     elem.className   = "code-highlighted";
+   }
+ }
+ function CodeHighlightOff(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(elem.cacheClassElem)
+     elem.className = elem.cacheClassElem;
+   if(elem.cacheClassTarget)
+     target.className = elem.cacheClassTarget;
+ }
+/*]]>*///-->
+</script>
+<script type="text/javascript" src="http://orgmode.org/mathjax/MathJax.js"></script>
+<script type="text/javascript">
+<!--/*--><![CDATA[/*><!--*/
+    MathJax.Hub.Config({
+        // Only one of the two following lines, depending on user settings
+        // First allows browser-native MathML display, second forces HTML/CSS
+        //  config: ["MMLorHTML.js"], jax: ["input/TeX"],
+            jax: ["input/TeX", "output/HTML-CSS"],
+        extensions: ["tex2jax.js","TeX/AMSmath.js","TeX/AMSsymbols.js",
+                     "TeX/noUndefined.js"],
+        tex2jax: {
+            inlineMath: [ ["\\(","\\)"] ],
+            displayMath: [ ['$$','$$'], ["\\[","\\]"], ["\\begin{displaymath}","\\end{displaymath}"] ],
+            skipTags: ["script","noscript","style","textarea","pre","code"],
+            ignoreClass: "tex2jax_ignore",
+            processEscapes: false,
+            processEnvironments: true,
+            preview: "TeX"
+        },
+        showProcessingMessages: true,
+        displayAlign: "center",
+        displayIndent: "2em",
+
+        "HTML-CSS": {
+             scale: 100,
+             availableFonts: ["STIX","TeX"],
+             preferredFont: "TeX",
+             webFont: "TeX",
+             imageFont: "TeX",
+             showMathMenu: true,
+        },
+        MMLorHTML: {
+             prefer: {
+                 MSIE:    "MML",
+                 Firefox: "MML",
+                 Opera:   "HTML",
+                 other:   "HTML"
+             }
+        }
+    });
+/*]]>*///-->
+</script>
+</head>
+<body>
+<div id="content">
+<nav class="navbar navbar-inverse navbar-fixed-top">
+  <div class="container-fluid">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-2">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html" title="SMUG : Super Monadic Über Go-into">SMÜG</a>
+</div>
+
+    <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-2">
+      <ul class="nav navbar-nav">
+        <li><a href="/README.html">README</a></li>
+        <li><a href="/smug.html">Docs</a></li>
+        <li class="dropdown">
+          <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" 
+             aria-expanded="false">Github <span class="caret"></span></a>
+          <ul class="dropdown-menu" role="menu">
+            <li><a href="https://github.com/drewc/smug">Code</a></li>
+            <li><a href="https://github.com/drewc/smug/issues">Issues</a></li>
+            <li><a href="#">Something else here</a></li>
+            <li class="divider"></li>
+            <li><a href="#">Separated link</a></li>
+            <li class="divider"></li>
+            <li><a href="#">One more separated link</a></li>
+          </ul>
+        </li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        <li><a href="#"><img src="/image/mascot.svg" height="20"> 
+</a></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+
+<div id="body" class="container" style="padding-top:65px"><div class="row">
+<div class="col-md-9">
+
+<p class="lead">
+
+<p>
+<code>SMUG</code> is a library for parsing text, based on <span class="underline">monadic parser
+combinators</span> <sup><a id="fnr.1" name="fnr.1" class="footref" href="#fn.1">1</a></sup>. Using a simple technique from the functional
+programming camp, <code>SMUG</code> makes it simple to create quick extensible
+recursive descent parsers without funky syntax or impenetrable
+macrology.
+</p>
+
+</p>
+</div>
+
+<nav id="toc-nav" class="col-md-3 hidden-xs hidden-sm"
+style="float:right">
+<nav id="table-of-contents">
+<h2>SMÜG</h2>
+<div id="text-table-of-contents">
+<ul>
+<li><a href="#Features">Features</a></li>
+<li><a href="#sec-2">Tutorial and Technical Report</a></li>
+<li><a href="#sec-3">Example : Parsing S-Expressions</a>
+<ul>
+<li><a href="#sec-3-1">Definition</a></li>
+<li><a href="#sec-3-2"><i>Parser</i> <code>.SEXP</code></a></li>
+<li><a href="#sec-3-3"><i>Structure Class</i> <code>SEXP</code></a></li>
+<li><a href="#sec-3-4"><i>Parser</i> <code>.ATOM</code></a></li>
+<li><a href="#sec-3-5"><i>Parser</i> <code>.CONS</code></a></li>
+<li><a href="#sec-3-6">Example</a></li>
+<li><a href="#sec-3-7">Source File</a></li>
+</ul>
+</li>
+<li><a href="#sec-4">Source Code</a>
+<ul>
+<li><a href="#sec-4-1"><code>smug.lisp</code></a></li>
+</ul>
+</li>
+<li><a href="#sec-5">footnotes</a></li>
+</ul>
+</div>
+</nav>
+</nav> <div class="col-md-9">
+
+<div id="outline-container-Features" class="outline-2">
+<h2 id="Features"><a id="sec-1" name="sec-1"></a>Features</h2>
+<div class="outline-text-2" id="text-Features">
+
+<ul class="org-ul">
+<li>parsers are first class values written in basic lisp
+</li>
+<li>non-deterministic infinite look-ahead  
+</li>
+<li>easy to learn, easy to use
+</li>
+<li>extensible input protocol : parse strings, streams, lists etc
+</li>
+<li>in-depth tutorial : no previous experience required.
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-sec-2" class="outline-2">
+<h2 id="sec-2">Tutorial and Technical Report</h2>
+<div class="outline-text-2" id="text-2">
+<p>
+There is an extensive <a href="tutorial.html">Tutorial</a> available that starts from
+scratch and literately implements <code>SMUG</code> itself. 
+</p>
+
+<p>
+If that is not enough, the paper that <code>SMUG</code> is based on, <a href="monparsing.html">Monadic
+Parser Combinators</a>, has been updated with Common Lisp code. This is a
+<b>Work In Progress</b> and does not yet reflect the source code of <code>SMUG</code>
+itself, but it may.
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3" class="outline-2">
+<h2 id="sec-3">Example : Parsing S-Expressions</h2>
+<div class="outline-text-2" id="text-3">
+<p>
+<code>SMUG</code> itself is written using the Common Lisp style of "symbolic
+expression"s. Using <code>smug</code> to parse <code>smug</code> is circular enough to be
+lisp-y.
+</p>
+</div>
+
+<div id="outline-container-sec-3-1" class="outline-3">
+<h3 id="sec-3-1">Definition</h3>
+<div class="outline-text-3" id="text-3-1">
+<blockquote>
+<p>
+<b>S-expression</b> 
+From Wikipedia, the free encyclopedia
+</p>
+
+<p>
+Tree data structure representing the s-expression for (* 2 (+ 3 4)) In
+computing, s-expressions, sexprs or sexps (for "symbolic expression")
+are a notation for nested list (tree-structured) data, invented for
+and popularized by the programming language Lisp, which uses them for
+source code as well as data. 
+</p>
+
+<p>
+In the usual parenthesized syntax of Lisp, an s-expression is
+classically defined inductively as
+</p>
+
+<ul class="org-ul">
+<li>an atom, or
+</li>
+<li>an expression of the form <code>(x . y)</code> where <code>x</code> and <code>y</code> are s-expressions.
+</li>
+</ul>
+
+<p>
+[&#x2026;]
+</p>
+
+<p>
+Most modern sexpr notations in addition use an abbreviated notation to
+represent lists in s-expressions, so that
+</p>
+
+<p>
+<code>(x y z)</code>
+stands for
+</p>
+
+<p>
+<code>(x . (y . (z . NIL)))</code>
+</p>
+</blockquote>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2" class="outline-3">
+<h3 id="sec-3-2"><i>Parser</i> <code>.SEXP</code></h3>
+<div class="outline-text-3" id="text-3-2">
+<p>
+All an s-expression could contain is :
+</p>
+
+<ul class="org-ul">
+<li>an atom 
+</li>
+<li>an expression.
+</li>
+</ul>
+
+<p>
+The expression will now be known as a <code>CONS</code>, so really the parser is
+simply this.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-lisp">(.or (.atom sexp) (.cons sexp))
+</pre>
+</div>
+
+<p>
+A <code>(.optional (.whitespace))</code> is added to the start, and the parser is
+complete.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-lisp" id="test-sexp.sexp">(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.sexp</span> (<span style="color: #228b22;">&amp;optional</span> (sexp *sexp*))
+  (.progn (.optional (.whitespace))
+          (.or (.atom sexp) (.cons sexp))))
+</pre>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2-1" class="outline-4">
+<h4 id="sec-3-2-1">A Note on Recursion</h4>
+<div class="outline-text-4" id="text-3-2-1">
+<p>
+A temptation could be to use <a href="file:///home/drewc/me/src/smug/doc/tutorial.html"><code>.AND</code></a>  as depicted in the
+tutorial. 
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-lisp">(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.sexp</span> (<span style="color: #228b22;">&amp;optional</span> (sexp *sexp*))
+  (.and (.optional (.whitespace))
+          (.or (.atom sexp) (.cons sexp))))
+</pre>
+</div>
+
+<p>
+The issue is that <code>.AND</code> as defined is not a <i>Special Operator</i>, or
+even a macro, but a simple function. Now, in <i><code>.CONS</code></i> we call <code>.SEXP</code>
+recursively. The brain seems to think that it should simply work, but
+the <code>INFO: Control stack guard page unprotected</code> says something
+different. 
+</p>
+
+<p>
+To avoid infinite recursion, it is generally a good idea to have at
+least one <code>.LET*</code> binding before the recursion. <code>.PROGN</code> is a macro
+that contains one. 
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3-3" class="outline-3">
+<h3 id="sec-3-3"><i>Structure Class</i> <code>SEXP</code></h3>
+<div class="outline-text-3" id="text-3-3">
+<p>
+The definition itself has <code>x</code> and <code>y</code>, which themselves are
+s-expressions, and <code>#\)</code>, <code>#\(</code>, <code>#\Space</code> and <code>#\.</code>.  That can simply
+recorded in a <i>struct</i>.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-lisp" id="test-sexp-struct">(<span style="color: #a020f0;">defstruct</span> <span style="color: #228b22;">sexp</span>
+  (open #\()
+  (separate #\.)
+  (close #\))
+  (whitespace '(#\Newline #\Space #\Tab)))
+</pre>
+</div>
+</div>
+
+<div id="outline-container-sec-3-3-1" class="outline-4">
+<h4 id="sec-3-3-1"><i>Variable</i> <code>*SEXP*</code></h4>
+<div class="outline-text-4" id="text-3-3-1">
+<p>
+Most of the time "normal" s-expressions will be parsed., so a default <i>special</i>
+variable is on order.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-lisp" id="test-sexp-var">(<span style="color: #a020f0;">defparameter</span> <span style="color: #a0522d;">*sexp*</span> (make-sexp))
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3-3-2" class="outline-4">
+<h4 id="sec-3-3-2"><i>Parser</i> <code>.whitespace</code></h4>
+<div class="outline-text-4" id="text-3-3-2">
+<div class="org-src-container">
+
+<pre class="src src-lisp" id="test-sexp.whitespace">(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.whitespace</span> (<span style="color: #228b22;">&amp;key</span> (sexp *sexp*)
+                         (result-type nil))
+  (.first (.map result-type (.is 'member (sexp-whitespace sexp)))))
+</pre>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3-4" class="outline-3">
+<h3 id="sec-3-4"><i>Parser</i> <code>.ATOM</code></h3>
+<div class="outline-text-3" id="text-3-4">
+<div class="org-src-container">
+
+<pre class="src src-lisp" id="test-sexp.atom">(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.atom</span> (<span style="color: #228b22;">&amp;optional</span> (sexp *sexp*))
+  (.or (|.#\\|) 
+       (.first (.map 'string (.constituent sexp)))))
+</pre>
+</div>
+</div>
+
+<div id="outline-container-sec-3-4-1" class="outline-4">
+<h4 id="sec-3-4-1"><i>Parser</i> <code>|.#\\|</code> : "Sharpsign Backslash"</h4>
+<div class="outline-text-4" id="text-3-4-1">
+<blockquote>
+<p>
+<b>Syntax:</b> <code>#\&lt;&lt;x&gt;&gt;</code>
+</p>
+
+<p>
+When the token x is a single character long, this parses as the
+literal character char. Uppercase and lowercase letters are
+distinguished after #\; #\A and #\a denote different character
+objects. Any single character works after #\, even those that are
+normally special to read, such as left-parenthesis and
+right-parenthesis.
+</p>
+
+<p>
+In the single character case, the x must be followed by a
+non-constituent character. After #\ is read, the reader backs up over
+the slash and then reads a token, treating the initial slash as a
+single escape character (whether it really is or not in the current
+readtable).
+</p>
+
+<p>
+When the token x is more than one character long, the x must have the
+syntax of a symbol with no embedded package markers. In this case, the
+sharpsign backslash notation parses as the character whose name is
+(string-upcase x);
+</p>
+</blockquote>
+
+<div class="org-src-container">
+
+<pre class="src src-lisp" id="test-sexp.sharpsign-backslash">(<span style="color: #a020f0;">defun</span> |.#\\| ()
+  (.let* ((sb (.string= <span style="color: #8b2252;">"#\\"</span>))
+          (char 
+           (.or (.prog1 (.item) (.or (.whitespace) 
+                                     (.not (.item))))
+                (.first (.map 'string (.constituent))))))
+    (.result (concatenate 'string sb (string char)))))
+</pre>
+</div>
+
+<pre class="example">
+|\.
+</pre>
+</div>
+</div>
+
+<div id="outline-container-sec-3-4-2" class="outline-4">
+<h4 id="sec-3-4-2"><i>Parser</i> <code>.CONSTITUENT</code></h4>
+<div class="outline-text-4" id="text-3-4-2">
+<blockquote>
+<p>
+<b>constituent</b> <i>n.</i>, <i>adj.</i> 
+</p>
+<ol class="org-ol">
+<li>a. <i>n.</i> :: the syntax type of a character that is part of a
+token. For details, see Section 2.1.4.1 (Constituent Characters).
+
+<p>
+b. <i>adj.</i> (of a character) having the constituent[1a] syntax
+type.  
+</p>
+
+<p>
+c. <i>n.</i> a constituent character.
+</p>
+</li>
+</ol>
+<p>
+&#x2013; <a href="http://www.lispworks.com/documentation/lw60/CLHS/Body/26_glo_c.htm#constituent">http://www.lispworks.com/documentation/lw60/CLHS/Body/26_glo_c.htm#constituent</a>
+</p>
+</blockquote>
+
+<p>
+The <code>SEXP</code> <i>struct</i> says what is not a member of a sexp, so anything
+that is <i>not not</i> a member is double negatively a constituent
+character.
+</p>
+
+<p>
+Strangely enough, what immediately arises adds another negative. The
+definition of the <i>Structure Class</i>  <code>SEXP</code> includes non-constituent characters
+yet is itself an s-expression. As luck would have it, they are
+preceeded by a <code>\</code> character. 
+</p>
+
+<p>
+By allowing that form of escaping, the <code>.CONSTITUENT</code> can be <code>DEFUN</code>'d.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-lisp" id="test-sexp.constituent">(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.constituent</span> (<span style="color: #228b22;">&amp;optional</span> (sexp *sexp*))
+ (.or (.and (.char= #\\) (.item))
+      (.is-not 'member (list* (sexp-open sexp)
+                              (sexp-close sexp)
+                              (sexp-whitespace sexp)))))
+</pre>
+</div>
+
+<pre class="example">
+\.CONSTITUENT
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3-5" class="outline-3">
+<h3 id="sec-3-5"><i>Parser</i> <code>.CONS</code></h3>
+<div class="outline-text-3" id="text-3-5">
+<p>
+#+name : test-sexp.cons
+</p>
+<div class="org-src-container">
+
+<pre class="src src-lisp">(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.cons</span> (<span style="color: #228b22;">&amp;optional</span> (sexp *sexp*))
+  (.let* ((car (.progn (.char= (sexp-open sexp))
+                       (.sexp)))
+          (dot (.optional 
+                (.progn 
+                 (.whitespace)
+                 (.char= (sexp-separate sexp)))))
+          (cdr (.prog1 (<span style="color: #a020f0;">if</span> dot 
+                           (.sexp)
+                           (.first (.map 'list (.sexp) 
+                                         <span style="color: #483d8b;">:at-least</span> 0)))
+                       (.char= #\)))))
+
+    (.result (cons car cdr))))
+</pre>
+</div>
+</div>
+</div>
+
+
+
+<div id="outline-container-sec-3-6" class="outline-3">
+<h3 id="sec-3-6">Example</h3>
+<div class="outline-text-3" id="text-3-6">
+<p>
+So, there is a struct definition sexp.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-lisp">(<span style="color: #a020f0;">defstruct</span> <span style="color: #228b22;">sexp</span>
+  (open #\()
+  (separate #\.)
+  (close #\))
+  (whitespace '(#\Newline #\Space #\Tab)))
+</pre>
+</div>
+
+<p>
+When the <code>CL:STRING</code> actually make a out of it, we will see two
+backslashes where in reality there is only one.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-lisp">(&#8827; (alexandria:read-file-into-string 
+    (merge-pathnames <span style="color: #8b2252;">"doc/test/sexp.lisp-expr"</span>
+       (asdf:system-source-directory <span style="color: #483d8b;">:smug</span>)))
+ <span style="color: #483d8b;">:=&gt;</span> 
+<span style="color: #8b2252;">"(defstruct sexp</span>
+<span style="color: #8b2252;">  (open #</span><span style="color: #8b2252; font-weight: bold;">\\</span><span style="color: #8b2252; font-weight: bold;">(</span><span style="color: #8b2252;">)</span>
+<span style="color: #8b2252;">  (separate #\\.)</span>
+<span style="color: #8b2252;">  (close #</span><span style="color: #8b2252; font-weight: bold;">\\</span><span style="color: #8b2252; font-weight: bold;">)</span><span style="color: #8b2252;">)</span>
+<span style="color: #8b2252;">  (whitespace '(#\\Newline #\\Space #\\Tab)))</span>
+<span style="color: #8b2252;">"</span>)
+</pre>
+</div>
+
+<p>
+This is simply because the <code>\</code> is already used as a <code>\</code>. 
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-lisp">(&#8827; (length <span style="color: #8b2252;">"\\"</span>) 
+  <span style="color: #483d8b;">:=&gt;</span> 1)
+</pre>
+</div>
+</div>
+</div>
+
+
+<div id="outline-container-sec-3-7" class="outline-3">
+<h3 id="sec-3-7">Source File</h3>
+<div class="outline-text-3" id="text-3-7">
+<div class="org-src-container">
+
+<pre class="src src-lisp">(<span style="color: #a020f0;">defpackage</span> <span style="color: #228b22;">:smug/parse/sexp</span>
+  (<span style="color: #483d8b;">:use</span> <span style="color: #483d8b;">:cl</span> <span style="color: #483d8b;">:smug</span>))
+(<span style="color: #a020f0;">in-package</span> <span style="color: #483d8b;">:smug/parse/sexp</span>)
+
+(<span style="color: #a020f0;">defstruct</span> <span style="color: #228b22;">sexp</span>
+  (open #\()
+  (separate #\.)
+  (close #\))
+  (whitespace '(#\Newline #\Space #\Tab)))
+
+(<span style="color: #a020f0;">defparameter</span> <span style="color: #a0522d;">*sexp*</span> (make-sexp))
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.whitespace</span> (<span style="color: #228b22;">&amp;key</span> (sexp *sexp*)
+                         (result-type nil))
+  (.first (.map result-type (.is 'member (sexp-whitespace sexp)))))
+
+(<span style="color: #a020f0;">defun</span> |.#\\| ()
+  (.let* ((sb (.string= <span style="color: #8b2252;">"#\\"</span>))
+          (char 
+           (.or (.prog1 (.item) (.or (.whitespace) 
+                                     (.not (.item))))
+                (.first (.map 'string (.constituent))))))
+    (.result (concatenate 'string sb (string char)))))
+
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.constituent</span> (<span style="color: #228b22;">&amp;optional</span> (sexp *sexp*))
+ (.or (.and (.char= #\\) (.item))
+      (.is-not 'member (list* (sexp-open sexp)
+                              (sexp-close sexp)
+                              (sexp-whitespace sexp)))))
+
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.atom</span> (<span style="color: #228b22;">&amp;optional</span> (sexp *sexp*))
+  (.or (|.#\\|) 
+       (.first (.map 'string (.constituent sexp)))))
+
+
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.sexp</span> (<span style="color: #228b22;">&amp;optional</span> (sexp *sexp*))
+  (.progn (.optional (.whitespace))
+          (.or (.atom sexp) (.cons sexp))))
+</pre>
+</div>
+
+<div class="org-src-container">
+
+<pre class="src src-lisp">(<span style="color: #a020f0;">defpackage</span> <span style="color: #228b22;">:smug/test/sexp</span>
+  (<span style="color: #483d8b;">:use</span> <span style="color: #483d8b;">:cl</span> <span style="color: #483d8b;">:smug</span>))
+(<span style="color: #a020f0;">in-package</span> <span style="color: #483d8b;">:smug/test/sexp</span>)
+
+(<span style="color: #a020f0;">defstruct</span> <span style="color: #228b22;">sexp</span>
+  (open #\()
+  (separate #\.)
+  (close #\))
+  (whitespace '(#\Newline #\Space #\Tab)))
+
+(<span style="color: #a020f0;">defparameter</span> <span style="color: #a0522d;">*sexp*</span> (make-sexp))
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.whitespace</span> (<span style="color: #228b22;">&amp;key</span> (sexp *sexp*)
+                         (result-type nil))
+  (.first (.map result-type (.is 'member (sexp-whitespace sexp)))))
+
+(<span style="color: #a020f0;">defun</span> |.#\\| ()
+  (.let* ((sb (.string= <span style="color: #8b2252;">"#\\"</span>))
+          (char 
+           (.or (.prog1 (.item) (.or (.whitespace) 
+                                     (.not (.item))))
+                (.first (.map 'string (.constituent))))))
+    (.result (concatenate 'string sb (string char)))))
+
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.constituent</span> (<span style="color: #228b22;">&amp;optional</span> (sexp *sexp*))
+ (.or (.and (.char= #\\) (.item))
+      (.is-not 'member (list* (sexp-open sexp)
+                              (sexp-close sexp)
+                              (sexp-whitespace sexp)))))
+
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.atom</span> (<span style="color: #228b22;">&amp;optional</span> (sexp *sexp*))
+  (.or (|.#\\|) 
+       (.first (.map 'string (.constituent sexp)))))
+
+
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.sexp</span> (<span style="color: #228b22;">&amp;optional</span> (sexp *sexp*))
+  (.progn (.optional (.whitespace))
+          (.or (.atom sexp) (.cons sexp))))
+</pre>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-4" class="outline-2">
+<h2 id="sec-4">Source Code</h2>
+<div class="outline-text-2" id="text-4">
+</div><div id="outline-container-sec-4-1" class="outline-3">
+<h3 id="sec-4-1"><code>smug.lisp</code></h3>
+<div class="outline-text-3" id="text-4-1">
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(<span style="color: #a020f0;">require</span> '<span style="color: #008b8b;">org-id</span>)
+(org-babel-lob-ingest <span style="color: #8b2252;">"tutorial.org"</span>)
+</pre>
+</div>
+
+<div class="org-src-container">
+
+<pre class="src src-lisp">(<span style="color: #a020f0;">defpackage</span> <span style="color: #228b22;">:smug/smug</span>
+  (<span style="color: #483d8b;">:nicknames</span> <span style="color: #483d8b;">:smug</span>)
+  (<span style="color: #483d8b;">:use</span> <span style="color: #483d8b;">:cl</span>)
+  (<span style="color: #483d8b;">:export</span> 
+   #<span style="color: #483d8b;">:.identity</span>
+   #<span style="color: #483d8b;">:.fail</span>
+   #<span style="color: #483d8b;">:.plus</span>
+   #<span style="color: #483d8b;">:.item</span>
+   #<span style="color: #483d8b;">:.bind</span>
+
+   #<span style="color: #483d8b;">:input-empty-p</span>
+   #<span style="color: #483d8b;">:input-first</span>
+   #<span style="color: #483d8b;">:input-rest</span>
+   #<span style="color: #483d8b;">:run</span>
+   #<span style="color: #483d8b;">:parse</span>  
+   #<span style="color: #483d8b;">:.let*</span>
+
+
+   #<span style="color: #483d8b;">:.or</span>
+   #<span style="color: #483d8b;">:.not</span>
+
+   #<span style="color: #483d8b;">:.map</span>
+   #<span style="color: #483d8b;">:.concatenate</span>
+   #<span style="color: #483d8b;">:.is</span>
+   #<span style="color: #483d8b;">:.is-not</span>
+   #<span style="color: #483d8b;">:.char=</span>
+   #<span style="color: #483d8b;">:.char-equal</span>
+   #<span style="color: #483d8b;">:.string-equal</span>
+   #<span style="color: #483d8b;">:.string=</span>
+   #<span style="color: #483d8b;">:.progn</span>
+   #<span style="color: #483d8b;">:.prog1</span>
+   #<span style="color: #483d8b;">:.prog2</span>
+   #<span style="color: #483d8b;">:.and</span>
+   #<span style="color: #483d8b;">:.or</span>
+   #<span style="color: #483d8b;">:.not</span>
+   #<span style="color: #483d8b;">:.first</span>
+   #<span style="color: #483d8b;">:.optional</span>
+   #<span style="color: #483d8b;">:.read-line</span>))
+(<span style="color: #a020f0;">in-package</span> <span style="color: #483d8b;">:smug/smug</span>) 
+
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">* Monad </span>
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">Bind and Identity does a monad make.</span>
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.bind</span> (parser function)
+  (<span style="color: #a020f0;">lambda</span> (input)
+    (<span style="color: #a020f0;">loop</span> <span style="color: #483d8b;">:for</span> (value . input) <span style="color: #483d8b;">:in</span> (run parser input)
+          <span style="color: #483d8b;">:append</span> (run (funcall function value) input))))
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.identity</span> (value)
+  (<span style="color: #a020f0;">lambda</span> (input)
+    (list (cons value input))))
+
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">* let* : The sequential binding macro</span>
+
+(<span style="color: #a020f0;">defmacro</span> <span style="color: #0000ff;">.let*</span> (bindings <span style="color: #228b22;">&amp;body</span> body)
+  (<span style="color: #a020f0;">if</span> bindings
+      (<span style="color: #a020f0;">let</span> ((symbol (first (first bindings))))
+        `(.bind ,@(cdr (first bindings))
+               (<span style="color: #a020f0;">lambda</span> (,symbol)
+                 ,@(<span style="color: #a020f0;">when</span> (or (string-equal (symbol-name symbol) <span style="color: #8b2252;">"_"</span>)
+                             (null (symbol-package symbol)))
+                         `((<span style="color: #a020f0;">declare</span> (ignorable ,symbol))))
+                 (.let* ,(cdr bindings)
+                   ,@body))))
+      `(<span style="color: #a020f0;">progn</span> ,@body)))
+
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">* Fail (aka zero) and Plus</span>
+
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">Fail is also Zero when making this a Zero/Plus type. While this</span>
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">does not really matter in this implementation, it is an "Interface"</span>
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">type nonetheless.</span>
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.fail</span> ()
+  (<span style="color: #a020f0;">lambda</span> (input) (<span style="color: #a020f0;">declare</span> (ignore input)) nil))
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.plus</span> (first-parser second-parser)
+  (<span style="color: #a020f0;">lambda</span> (input)
+    (append (funcall first-parser input) (funcall second-parser input))))
+
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">* Run</span>
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">Interface type for run-ables.</span>
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">run</span> (parser input)
+  (funcall parser input))
+
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">* Parser</span>
+
+(<span style="color: #a020f0;">defgeneric</span> <span style="color: #0000ff;">input-empty-p</span> (input)
+  (<span style="color: #483d8b;">:method</span> ((input string)) (zerop (length input))))
+
+(<span style="color: #a020f0;">defgeneric</span> <span style="color: #0000ff;">input-first</span> (input)
+  (<span style="color: #483d8b;">:method</span> ((input string)) (aref input 0)))
+
+(<span style="color: #a020f0;">defgeneric</span> <span style="color: #0000ff;">input-rest</span> (input)
+  (<span style="color: #483d8b;">:method</span> ((input string))
+    (<span style="color: #a020f0;">multiple-value-bind</span> (string displacement) 
+        (array-displacement input)      
+      (make-array (1- (length input))
+                  <span style="color: #483d8b;">:displaced-to</span> (or string input)
+                  <span style="color: #483d8b;">:displaced-index-offset</span> (1+ displacement)
+                  <span style="color: #483d8b;">:element-type</span> (array-element-type input)))))
+
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">** Item makes it a parser</span>
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.item</span> ()
+  (<span style="color: #a020f0;">lambda</span> (input)
+    (<span style="color: #a020f0;">unless</span> (input-empty-p input)
+      (list (cons (input-first input)
+                  (input-rest input))))))
+
+
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">** Parse makes it VALUESd</span>
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">parse</span> (parser input)
+  (<span style="color: #a020f0;">let</span> ((result (run parser input)))
+    (<span style="color: #a020f0;">when</span> result 
+      (<span style="color: #a020f0;">destructuring-bind</span> ((result . input) <span style="color: #228b22;">&amp;rest</span> rest)
+          result      
+        (apply #'values result input rest)))))
+
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.or</span> (parser <span style="color: #228b22;">&amp;rest</span> parsers)
+  (<span style="color: #a020f0;">lambda</span> (input)
+    (or (funcall parser input) 
+        (<span style="color: #a020f0;">when</span> parsers 
+          (funcall (apply #'.or parsers) input)))))
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.not</span> (parser)
+  (<span style="color: #a020f0;">lambda</span> (input)
+    (<span style="color: #a020f0;">let</span> ((result (funcall parser input)))
+      (<span style="color: #a020f0;">if</span> result
+          nil
+          (list (cons t input))))))
+
+
+
+
+
+
+
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.satisfies</span> (predicate <span style="color: #228b22;">&amp;rest</span> args)
+  (.bind (.item) 
+        (<span style="color: #a020f0;">lambda</span> (x) 
+          (<span style="color: #a020f0;">if</span> (apply predicate x args)
+              (.identity x)
+              (.fail)))))
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.optional</span> (parser)
+  (.or parser (.identity nil)))
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.and</span> (p1 <span style="color: #228b22;">&amp;rest</span> ps)
+  (.let* ((result p1))
+    (<span style="color: #a020f0;">if</span> ps
+        (apply #'.and ps)
+        (.identity result))))
+
+
+(<span style="color: #a020f0;">defmacro</span> <span style="color: #0000ff;">.progn</span> (<span style="color: #228b22;">&amp;rest</span> parsers)
+    (<span style="color: #a020f0;">if</span> (rest parsers)
+        (<span style="color: #a020f0;">let</span> ((name (gensym)))
+          `(.let* ((,name ,(first parsers)))
+             (.progn ,@(rest parsers))))
+        (first parsers)))
+
+(<span style="color: #a020f0;">defmacro</span> <span style="color: #0000ff;">.prog1</span> (parser <span style="color: #228b22;">&amp;rest</span> parsers)
+  (<span style="color: #a020f0;">let</span> ((name (gensym))
+        (ignore (gensym)))
+    `(.let* ((,name ,parser)
+             (,ignore (.progn ,@parsers)))
+       (.identity ,name))))
+
+(<span style="color: #a020f0;">defmacro</span> <span style="color: #0000ff;">.prog2</span> (parser1 parser2 <span style="color: #228b22;">&amp;rest</span> parsers)
+  (<span style="color: #a020f0;">let</span> ((name (gensym))
+        (ignore (gensym)))
+    `(.let* ((,ignore ,parser1)
+             (,name ,parser2)
+             (,ignore (.progn ,@parsers)))
+       (.identity ,name))))
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.is-not</span> (predicate <span style="color: #228b22;">&amp;rest</span> args)
+  (.satisfies (<span style="color: #a020f0;">lambda</span> (i) 
+                 (cl:not (apply predicate i args)))))
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.is</span> (predicate <span style="color: #228b22;">&amp;rest</span> args)
+  (apply #'.satisfies predicate args))
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.mapcar</span> (parser)
+    (.plus (.let* ((x parser)
+                   (xs (.mapcar parser)))
+             (.identity (cons x xs)))
+           (.identity ())))
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.mapc</span> (parser)
+    (.plus (.let* ((_ parser)
+                   (_ (.mapc parser)))
+             (.identity parser))
+           (.identity parser)))
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.make-list</span> (size <span style="color: #228b22;">&amp;key</span> (initial-element (.item)))
+  (<span style="color: #a020f0;">if</span> (zerop size) 
+      (.identity nil)
+      (.let* ((first initial-element)
+              (rest (.make-list (1- size) 
+                                <span style="color: #483d8b;">:initial-element</span> initial-element)))
+        (.identity (list* first rest)))))               
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.concatenate</span> (output-type-spec <span style="color: #228b22;">&amp;rest</span> parsers)
+  (<span style="color: #a020f0;">if</span> (not parsers)
+      (.fail)
+      (.let* ((first (first parsers))
+              (rest (<span style="color: #a020f0;">if</span> (rest parsers)
+                        (apply 
+                         #'.concatenate output-type-spec (rest parsers))
+                        (.identity nil))))
+        (.identity (cl:concatenate output-type-spec first rest)))))
+
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.map</span> (result-type parser
+             <span style="color: #228b22;">&amp;key</span> 
+               (at-least 1))
+  <span style="color: #8b2252;">"=&gt; a ~result-type~ of /parser/ results."</span>
+  (.let* ((list-1 (.make-list at-least <span style="color: #483d8b;">:initial-element</span> parser))
+          (list-2 (funcall (<span style="color: #a020f0;">if</span> result-type #'.mapcar #'.mapc) parser)))
+    (.identity (<span style="color: #a020f0;">when</span> result-type (concatenate result-type list-1 list-2)))))
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.char=</span> (x)
+  (.is #'cl:char= x))
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.digit-char-p</span> ()
+  (.is #'cl:digit-char-p))
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.lower-case-p</span> ()
+  (.is #'cl:lower-case-p))
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.upper-case-p</span> ()
+  (.is #'cl:upper-case-p))  
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.read-line</span> (<span style="color: #228b22;">&amp;optional</span> 
+                     (eof-error-p t)
+                     eof-value)
+  (.let* ((text (.optional 
+                 (.first (.map 'list (.is-not #'char= #\Newline)))))
+          (newline (.or (.char= #\Newline)
+                        (.and (.not (.item)) 
+                              (.identity '())))))
+    (<span style="color: #a020f0;">if</span> (or text newline)
+        (.identity (concatenate 'string text (<span style="color: #a020f0;">when</span> newline (string newline))))
+        (<span style="color: #a020f0;">if</span> eof-error-p 
+            (.fail)
+            (.identity eof-value)))))
+
+
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.string=</span> (string)
+  (<span style="color: #a020f0;">if</span> (string= string <span style="color: #8b2252;">""</span>)
+      (.identity string)
+      (.let* 
+          ((_ (.is 'char= (aref string 0)))
+           (_ (.string= (input-rest string))))
+        (.identity string))))
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.char-equal</span> (char)
+  (.is #'cl:char-equal char))
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.string-equal</span> (string)
+  (<span style="color: #a020f0;">labels</span> ((%string-equal (string)
+             (.let* ((first (.char-equal (aref string 0)))
+                     (rest (<span style="color: #a020f0;">if</span> (&gt; (length string) 1)
+                                  (%string-equal (subseq string 1))
+                                  (.identity nil))))
+               (.identity (cons first rest)))))
+    (.let* ((list (%string-equal string)))
+      (.identity (coerce list 'string)))))
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.first</span> (parser)
+  (<span style="color: #a020f0;">lambda</span> (input)
+    (<span style="color: #a020f0;">let</span> ((results (run parser input)))
+       (<span style="color: #a020f0;">when</span> results (list (cl:first results))))))
+</pre>
+</div>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-5" class="outline-2">
+<h2 id="sec-5">footnotes</h2>
+<div class="outline-text-2" id="text-5">
+</div>
+</div>
+<div id="footnotes">
+<h2 class="footnotes">Footnotes: </h2>
+<div id="text-footnotes">
+
+<div class="footdef"><sup><a id="fn.1" name="fn.1" class="footnum" href="#fnr.1">1</a></sup> <p class="footpara">
+Monadic parser combinators (pdf, ps, bibtex) Graham Hutton and
+Erik Meijer. Technical Report NOTTCS-TR-96-4, Department of Computer
+Science, University of
+Nottingham, 1996.
+</p>
+
+<p class="footpara">
+&#x2013; <a href="http://www.cs.nott.ac.uk/~gmh/bib.html#monparsing">http://www.cs.nott.ac.uk/~gmh/bib.html#monparsing</a>
+</p></div>
+
+
+</div>
+</div></div>
+</body>
+</html>
