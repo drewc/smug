@@ -2,7 +2,7 @@
 <html>
 <head>
 <title>Monadic Parser Combinators</title>
-<!-- 2015-06-04 Thu 17:54 -->
+<!-- 2015-06-04 Thu 21:42 -->
 <meta  charset="utf-8">
 <meta  name="generator" content="Org-mode">
 <meta  name="author" content="Drew Crampsie">
@@ -100,43 +100,54 @@ for the JavaScript code in this tag.
 </head>
 <body>
 <div id="content">
-<nav class="navbar navbar-inverse navbar-fixed-top">
-  <div class="container-fluid">
-    <div class="navbar-header">
-      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-2">
-        <span class="sr-only">Toggle navigation</span>
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-      </button>
-      <a class="navbar-brand" href="index.html" title="SMUG : Super Monadic Über Go-into">SMÜG</a>
-</div>
-
-    <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-2">
-      <ul class="nav navbar-nav">
-        <li><a href="/README.html">README</a></li>
-        <li><a href="/smug.html">Docs</a></li>
-        <li class="dropdown">
-          <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" 
-             aria-expanded="false">Github <span class="caret"></span></a>
-          <ul class="dropdown-menu" role="menu">
-            <li><a href="https://github.com/drewc/smug">Code</a></li>
-            <li><a href="https://github.com/drewc/smug/issues">Issues</a></li>
-            <li><a href="#">Something else here</a></li>
-            <li class="divider"></li>
-            <li><a href="#">Separated link</a></li>
-            <li class="divider"></li>
-            <li><a href="#">One more separated link</a></li>
-          </ul>
-        </li>
-      </ul>
-      <ul class="nav navbar-nav navbar-right">
-        <li><a href="#"><img src="/image/mascot.svg" height="20"> 
-</a></li>
-      </ul>
-    </div>
+  <nav class="navbar navbar-inverse navbar-fixed-top">
+    <div class="container-fluid">
+      <div class="navbar-header">
+        <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-2">
+          <span class="sr-only">Toggle navigation</span>
+          <span class="icon-bar"></span>
+          <span class="icon-bar"></span>
+          <span class="icon-bar"></span>
+        </button>
+        <a class="navbar-brand" href="index.html" title="SMUG : Super Monadic Über Go-into">SMÜG</a>
   </div>
-</nav>
+
+      <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-2">
+        <ul class="nav navbar-nav">
+          <li><a href="/README.html">README</a></li>
+          <li><a href="/smug.html">Docs</a></li>
+          <li class="dropdown">
+            <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" 
+               aria-expanded="false">Github <span class="caret"></span></a>
+            <ul class="dropdown-menu" role="menu">
+              <li><a href="https://github.com/drewc/smug">Code</a></li>
+              <li><a href="https://github.com/drewc/smug/issues">Issues</a></li>
+              <li><a href="#">Something else here</a></li>
+              <li class="divider"></li>
+              <li><a href="#">Separated link</a></li>
+              <li class="divider"></li>
+              <li><a href="#">One more separated link</a></li>
+            </ul>
+          </li>
+        </ul>
+        <ul class="nav navbar-nav navbar-right">
+          <li><a href="#"><img src="/image/mascot.svg" height="20"> 
+  </a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-63785449-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
 
 <div id="body" class="container" style="padding-top:65px"><div class="row">
 <div class="col-md-9">
@@ -460,8 +471,10 @@ Dually, the parser zero always fails, regardless of the input string:
 <div class="org-src-container">
 
 <pre class="src src-lisp" id="monparsing-lisp-zero"><span style="color: #b22222;">;; </span><span style="color: #b22222;">in SMUG we use .FAIL because that is what Haskell Monads have.</span>
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">the (eq (function zero) (function .fail)) is somewhat T.</span>
+
+(<span style="color: #a020f0;">declaim</span> (ftype (function () (parser t)) zero))
 (<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">zero</span> ()
- (<span style="color: #a020f0;">declare</span> (ftype parser zero))
  (constantly NIL))
 </pre>
 </div>
@@ -482,27 +495,25 @@ input string is non-empty, and fails otherwise:
 
 <div class="org-src-container">
 
-<pre class="src src-lisp" id="lisp-item">(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">item</span> ()
+<pre class="src src-lisp" id="monparsing-lisp-item"><span style="color: #b22222;">;; </span><span style="color: #b22222;">Common Lisp is not functional, and has no syntax for the FIRST and</span>
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">REST of STRINGs. CONS, AREF and ARRAY-DISPLACEMENT are the long</span>
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">form of "x:xs". Also, (not (typep "" 'null)).</span>
+
+(<span style="color: #a020f0;">declaim</span> (ftype (function () (parser character)) item))
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">item</span> ()
   (<span style="color: #a020f0;">lambda</span> (input)
     (<span style="color: #a020f0;">etypecase</span> input 
       (null nil)
       (string
        (<span style="color: #a020f0;">unless</span> (equal input <span style="color: #8b2252;">""</span>)
-         (list (cons (aref input 0)
-                     (subseq input 1))))))))
-</pre>
-</div>
-
-<div class="org-src-container">
-
-<pre class="src src-lisp" id="test-lisp-item">(<span style="color: #ff0000; font-weight: bold;">assert</span> (equal '((#\a . <span style="color: #8b2252;">"sd"</span>))
-               (funcall (item) <span style="color: #8b2252;">"asd"</span>)))
-
-(<span style="color: #ff0000; font-weight: bold;">assert</span> (equal '((#\a . <span style="color: #8b2252;">""</span>))
-               (funcall (item) <span style="color: #8b2252;">"a"</span>)))
-
-(<span style="color: #ff0000; font-weight: bold;">assert</span> (null
-         (funcall (item) <span style="color: #8b2252;">""</span>)))
+         (list 
+          (cons (aref input 0)
+                (<span style="color: #a020f0;">multiple-value-bind</span> (string displacement)
+                    (array-displacement input)      
+                  (make-array (1- (length input))
+                              <span style="color: #483d8b;">:displaced-to</span> (or string input)
+                              <span style="color: #483d8b;">:displaced-index-offset</span> (1+ displacement)
+                              <span style="color: #483d8b;">:element-type</span> (array-element-type input))))))))))
 </pre>
 </div>
 </div>
@@ -543,7 +554,8 @@ p <span style="color: #0000ff;">&#8216;</span>seq<span style="color: #a0522d;">&
 
 <div class="org-src-container">
 
-<pre class="src src-lisp" id="lisp-by-itself-sequence">(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">sequence</span> (parser1 parser2)
+<pre class="src src-lisp" id="lisp-by-itself-sequence">(<span style="color: #a020f0;">declaim</span> (ftype (function ((parser t) (parser t)) (parser t)) sequence))
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">sequence</span> (parser1 parser2)
   (<span style="color: #a020f0;">lambda</span> (input)
     (<span style="color: #a020f0;">loop</span> <span style="color: #483d8b;">:for</span> (result-1 . input-1) 
        <span style="color: #483d8b;">:in</span> (funcall parser1 input)
@@ -554,14 +566,6 @@ p <span style="color: #0000ff;">&#8216;</span>seq<span style="color: #a0522d;">&
           (cons 
            (cons result-1 result-2)
            input-2)))))
-</pre>
-</div>
-
-<div class="org-src-container">
-
-<pre class="src src-lisp" id="test-lisp-sequence">(<span style="color: #ff0000; font-weight: bold;">assert</span> 
- (equal '(((#\a . #\s) . <span style="color: #8b2252;">"d"</span>))
-        (funcall (sequence (item) (item)) <span style="color: #8b2252;">"asd"</span>)))
 </pre>
 </div>
 
@@ -590,7 +594,13 @@ p <span style="color: #0000ff;">&#8216;</span>bind<span style="color: #a0522d;">
 
 <div class="org-src-container">
 
-<pre class="src src-lisp" id="lisp-bind">(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">bind</span> (parser function)
+<pre class="src src-lisp" id="lisp-bind"> (<span style="color: #a020f0;">lambda</span> (input) 
+                  (mapcan (<span style="color: #a020f0;">lambda</span> (cons) 
+                            (<span style="color: #a020f0;">destructuring-bind</span> (value . string) cons
+                              (funcall (funcall function value) string)))
+                          (funcall parser input)))
+
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">bind</span> (parser function)
   (<span style="color: #a020f0;">lambda</span> (input)
     (<span style="color: #a020f0;">loop</span> <span style="color: #483d8b;">:for</span> (value . input) 
        <span style="color: #483d8b;">:in</span> (funcall parser input)
@@ -675,19 +685,6 @@ q <span style="color: #0000ff;">&#8216;</span>bind<span style="color: #a0522d;">
 (On the other hand, bind cannot be defined in terms of seq.)
 </p>
 
-<div class="org-src-container">
-
-<pre class="src src-lisp" id="test-lisp-test-bind">(<span style="color: #a020f0;">let*</span> ((p1 (item))
-       (p2 (result 'yay!))
-       (pn (sequence 
-            (item) (result 'two-much-yay!))))
-  (<span style="color: #ff0000; font-weight: bold;">assert</span> (equal '(((#\A YAY! 
-                     (#\S . TWO-MUCH-YAY!)) 
-                    . <span style="color: #8b2252;">"D"</span>))
-                 (funcall (|lisp test bind|
-                           p1 p2 pn) <span style="color: #8b2252;">"ASD"</span>))))
-</pre>
-</div>
 
 <p>
 Using the bind combinator, we are now able to define some simple but useful

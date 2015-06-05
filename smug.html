@@ -2,7 +2,7 @@
 <html>
 <head>
 <title>SMUG : Super Monadic Über Go-into SMUG : Parsing S-Expressions with Super Monadic Über Go-into</title>
-<!-- 2015-06-04 Thu 16:16 -->
+<!-- 2015-06-04 Thu 21:42 -->
 <meta  charset="utf-8">
 <meta  name="generator" content="Org-mode">
 <meta  name="author" content="Drew Crampsie">
@@ -100,43 +100,54 @@ for the JavaScript code in this tag.
 </head>
 <body>
 <div id="content">
-<nav class="navbar navbar-inverse navbar-fixed-top">
-  <div class="container-fluid">
-    <div class="navbar-header">
-      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-2">
-        <span class="sr-only">Toggle navigation</span>
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-      </button>
-      <a class="navbar-brand" href="index.html" title="SMUG : Super Monadic Über Go-into">SMÜG</a>
-</div>
-
-    <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-2">
-      <ul class="nav navbar-nav">
-        <li><a href="/README.html">README</a></li>
-        <li><a href="/smug.html">Docs</a></li>
-        <li class="dropdown">
-          <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" 
-             aria-expanded="false">Github <span class="caret"></span></a>
-          <ul class="dropdown-menu" role="menu">
-            <li><a href="https://github.com/drewc/smug">Code</a></li>
-            <li><a href="https://github.com/drewc/smug/issues">Issues</a></li>
-            <li><a href="#">Something else here</a></li>
-            <li class="divider"></li>
-            <li><a href="#">Separated link</a></li>
-            <li class="divider"></li>
-            <li><a href="#">One more separated link</a></li>
-          </ul>
-        </li>
-      </ul>
-      <ul class="nav navbar-nav navbar-right">
-        <li><a href="#"><img src="/image/mascot.svg" height="20"> 
-</a></li>
-      </ul>
-    </div>
+  <nav class="navbar navbar-inverse navbar-fixed-top">
+    <div class="container-fluid">
+      <div class="navbar-header">
+        <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-2">
+          <span class="sr-only">Toggle navigation</span>
+          <span class="icon-bar"></span>
+          <span class="icon-bar"></span>
+          <span class="icon-bar"></span>
+        </button>
+        <a class="navbar-brand" href="index.html" title="SMUG : Super Monadic Über Go-into">SMÜG</a>
   </div>
-</nav>
+
+      <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-2">
+        <ul class="nav navbar-nav">
+          <li><a href="/README.html">README</a></li>
+          <li><a href="/smug.html">Docs</a></li>
+          <li class="dropdown">
+            <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" 
+               aria-expanded="false">Github <span class="caret"></span></a>
+            <ul class="dropdown-menu" role="menu">
+              <li><a href="https://github.com/drewc/smug">Code</a></li>
+              <li><a href="https://github.com/drewc/smug/issues">Issues</a></li>
+              <li><a href="#">Something else here</a></li>
+              <li class="divider"></li>
+              <li><a href="#">Separated link</a></li>
+              <li class="divider"></li>
+              <li><a href="#">One more separated link</a></li>
+            </ul>
+          </li>
+        </ul>
+        <ul class="nav navbar-nav navbar-right">
+          <li><a href="#"><img src="/image/mascot.svg" height="20"> 
+  </a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-63785449-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
 
 
 <div id="body" class="container" style="padding-top:65px"><div class="row">
@@ -762,14 +773,27 @@ This is simply because the <code>\</code> is already used as a <code>\</code>.
 <span style="color: #b22222;">;; </span><span style="color: #b22222;">* Monad </span>
 <span style="color: #b22222;">;; </span><span style="color: #b22222;">Bind and Identity does a monad make.</span>
 
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">** /Parser Function/ Identity </span>
+
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">It is very simple, and can be inlined if needed.  </span>
+
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">"The inline proclamation preceding the defun form ensures that the</span>
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">compiler has the opportunity save the information necessary for</span>
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">inline expansion, and the notinline proclamation following the</span>
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">defun form prevents f from being expanded inline everywhere."</span>
+
+(<span style="color: #a020f0;">declaim</span> (<span style="color: #a020f0;">inline</span> .identity))
+(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.identity</span> (value)
+  (<span style="color: #a020f0;">lambda</span> (input)
+    (list (cons value input))))
+(<span style="color: #a020f0;">declaim</span> (notinline .identity))
+
+<span style="color: #b22222;">;; </span><span style="color: #b22222;">** BIND</span>
+
 (<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.bind</span> (parser function)
   (<span style="color: #a020f0;">lambda</span> (input)
     (<span style="color: #a020f0;">loop</span> <span style="color: #483d8b;">:for</span> (value . input) <span style="color: #483d8b;">:in</span> (run parser input)
           <span style="color: #483d8b;">:append</span> (run (funcall function value) input))))
-
-(<span style="color: #a020f0;">defun</span> <span style="color: #0000ff;">.identity</span> (value)
-  (<span style="color: #a020f0;">lambda</span> (input)
-    (list (cons value input))))
 
 <span style="color: #b22222;">;; </span><span style="color: #b22222;">* let* : The sequential binding macro</span>
 
