@@ -62,7 +62,6 @@
       (invoke-restart replace-invalid old new was-equal))))
 
 (defun run (parser input)
-  (declare (optimize (debug 3)))
   (loop
     (restart-case
       (return (funcall parser input))
