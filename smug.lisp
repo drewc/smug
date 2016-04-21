@@ -10,6 +10,7 @@
    #:input-empty-p
    #:input-first
    #:input-rest
+   #:replace-invalid
    #:run
    #:parse  
    #:.plus
@@ -47,8 +48,27 @@
                    ,@body))))
       `(progn ,@body)))
 
+(defun replace-subseq (needle haystack replacement)
+  (let* ((haystack (copy-seq haystack))
+         (idx (search needle haystack :test 'equal)))
+    (when idx
+      (replace haystack replacement :start1 idx))
+    haystack))
+
+(defun replace-invalid (old new)
+  (let ((replace-invalid (find-restart 'replace-invalid)))
+    (when replace-invalid
+      (invoke-restart replace-invalid old new))))
+
 (defun run (parser input)
-  (funcall parser input))
+    (restart-case
+      (progn
+        (funcall parser input))
+      (replace-invalid (old new)
+         (let ((next-replace-invalid (find-restart 'replace-invalid)))
+           (if (and next-replace-invalid (not (search old input)))
+             (invoke-restart 'replace-invalid old new)
+             (funcall parser (replace-subseq old (copy-seq input) new)))))))
 
 (defun parse (parser input)
   (let ((result (run parser input)))
