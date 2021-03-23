@@ -182,7 +182,7 @@
 
 ** ~.ITEM~
 
-    The last true primitive is .~.ITEM~, which is a parser that
+    The last true primitive is ~.ITEM~, which is a parser that
     consumes the first token in the input, or fails in the input is
     empty.
 
