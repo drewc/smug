@@ -269,4 +269,10 @@
 (defun .first (parser)
   (lambda (input)
     (let ((results (run parser input)))
-       (when results (list (cl:first results))))))
+      (when results (list (cl:first results))))))
+
+(defun .one-of (parser list)
+  (if (null list)
+      (.identity nil)
+      (.or (funcall parser (first list))
+           (.one-of parser (rest list)))))
