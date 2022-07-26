@@ -48,27 +48,31 @@
                    ,@body))))
       `(progn ,@body)))
 
-(defun replace-subseq (needle haystack replacement)
-  (let* ((haystack (copy-seq haystack))
-         (idx (search needle haystack :test 'equal)))
-    (when idx
-      (replace haystack replacement :start1 idx))
-    haystack))
+(defun replace-beginning (needle haystack replacement)
+  (let* ((needle-length (length needle)))
+    (if (string= haystack needle :end1 needle-length)
+      (concatenate 'string
+                   replacement
+                   (subseq haystack needle-length))
+      haystack)))
 
-(defun replace-invalid (old new)
+(defun replace-invalid (old new &optional was-equal)
   (let ((replace-invalid (find-restart 'replace-invalid)))
     (when replace-invalid
-      (invoke-restart replace-invalid old new))))
+      (invoke-restart replace-invalid old new was-equal))))
 
 (defun run (parser input)
+  (loop
     (restart-case
-      (progn
-        (funcall parser input))
-      (replace-invalid (old new)
-         (let ((next-replace-invalid (find-restart 'replace-invalid)))
-           (if (and next-replace-invalid (not (search old input)))
-             (invoke-restart 'replace-invalid old new)
-             (funcall parser (replace-subseq old (copy-seq input) new)))))))
+      (return (funcall parser input))
+        
+      (replace-invalid (old new &optional was-equal)
+        (let* ((old-length (length old))
+               (begins-with (and (<= old-length (length input))
+                                 (string= old input :end2 old-length))))
+          (if (and begins-with was-equal)
+            (setf input (replace-beginning old input new))        
+            (replace-invalid old new begins-with)))))))
 
 (defun parse (parser input)
   (let ((result (run parser input)))
